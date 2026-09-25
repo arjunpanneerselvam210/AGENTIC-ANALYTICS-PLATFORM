@@ -1,0 +1,2298 @@
+openapi: 3.1.0
+info:
+  title: FreshMart Agentic Analytics API
+  description: "\n# FreshMart Agentic Analytics API\n\nWelcome to the **FreshMart\
+    \ Agentic Analytics Platform** enterprise API documentation.\n\nFreshMart Agentic\
+    \ Analytics provides secure, AI-powered natural-language analytics for FreshMart\
+    \ enterprise business data across retail operations, customer relationship management,\
+    \ human resources, inventory warehousing, purchasing, and financial performance.\n\
+    \n---\n\n### Core Platform Capabilities\n\n* **AI-Powered Natural-Language Analytics:**\
+    \ Inquire in plain English (e.g., *\"Why did profit decrease in August?\"* or\
+    \ *\"Show monthly sales trend for the last 12 months\"*).\n* **LangGraph Multi-Agent\
+    \ Orchestration:** Specialized agents collaborate autonomously:\n  * **Intent\
+    \ Classifier:** Detects analytical goal, business domain, and inquiry category.\n\
+    \  * **Permission Checker:** Enforces database table and column-level RBAC prior\
+    \ to query generation.\n  * **Schema Planner:** Dynamically inspects schemas using\
+    \ the Model Context Protocol (MCP).\n  * **SQL Generator & Corrector:** Synthesizes\
+    \ read-only SQL via local `qwen2.5-coder:7b`.\n  * **SQL Validator:** Rigorous\
+    \ AST parser preventing non-SELECT, destructive, or unauthorized queries.\n  *\
+    \ **SQL Executor:** Safely runs validated SQL through MCP with row bounding and\
+    \ timeout limits.\n  * **Investigation Planner & Root-Cause Agent:** Formulates\
+    \ diagnostic hypotheses and performs multi-step period-over-period variance decomposition.\n\
+    \  * **Business Analyzer & Response Generator:** Grounded narrative synthesis\
+    \ powered by `llama3.1:8b`.\n* **Model Context Protocol (MCP) Read-Only Database\
+    \ Layer:** Controlled, secure interface ensuring the AI agents only access approved\
+    \ business databases with read-only credentials.\n* **Deterministic Executive\
+    \ Dashboard:** Direct real-time MySQL executive metrics, KPI cards, sales velocity,\
+    \ category distributions, and inventory deficits.\n* **Enterprise Security & RBAC:**\
+    \ Authoritative PostgreSQL JWT Bearer authentication with 7 enterprise roles and\
+    \ 11 granular permission codes.\n* **Data Provenance & Auditability:** Responses\
+    \ include citations of underlying database tables, columns, and metric calculations.\n\
+    \n---\n\n### Authentication & Authorization\n\nAll analytics, dashboard, admin,\
+    \ and chat endpoints require JWT Bearer authentication:\n1. Obtain an access token\
+    \ via `POST /api/v1/auth/login` or click the **Authorize** button in Swagger UI.\n\
+    2. Provide the token in the `Authorization` header as: `Bearer <token>`.\n3. The\
+    \ platform validates role permissions on every request before any analytical workflow\
+    \ or database query is initiated.\n\n---\n\n### Interactive Swagger UI Testing\n\
+    \nUse the **Authorize** button above to authenticate with one of the following\
+    \ demo credentials:\n* **CEO (Full enterprise access):** `ceo` / `CeoPassword123!`\n\
+    * **Sales Manager:** `sales.manager` / `SalesPassword123!`\n* **Finance Manager:**\
+    \ `finance.manager` / `FinancePassword123!`\n* **HR Manager:** `hr.manager` /\
+    \ `HrPassword123!`\n* **Inventory Manager:** `inventory.manager` / `InventoryPassword123!`\n\
+    * **ERP Manager:** `erp.manager` / `ErpPassword123!`\n* **System Administrator:**\
+    \ `admin` / `AdminPassword123!`\n"
+  contact:
+    name: FreshMart Enterprise Analytics Engineering Team
+    email: analytics-engineering@freshmart.local
+  license:
+    name: Proprietary / Enterprise Edition
+  version: 1.0.0
+paths:
+  /api/v1/auth/login:
+    post:
+      tags:
+      - Authentication
+      summary: Authenticate User & Generate JWT Access Token
+      description: 'Authenticates a FreshMart user with username and password, returning
+        a signed JWT Bearer access token along with the user profile, role, and granted
+        RBAC permission codes.
+
+
+        **Supported Content-Types:**
+
+        - `application/json`: Standard REST API clients
+
+        - `application/x-www-form-urlencoded`: Interactive Swagger UI Authorize dialog
+        and HTML forms
+
+
+        **Available Demo Accounts (Password: `<Role>Password123!` or `AdminPassword123!`):**
+
+        - `ceo`: Full enterprise analytics access
+
+        - `sales.manager`: Sales, CRM, and inventory analytics
+
+        - `finance.manager`: Financial P&L, expenses, and profit analytics
+
+        - `hr.manager`: HRMS directory and employee salary analytics
+
+        - `inventory.manager`: Products, warehouse stock, and purchasing
+
+        - `erp.manager`: Integrated procurement, stock, sales, and HR
+
+        - `admin`: System administration (user and role management)'
+      operationId: loginUser
+      requestBody:
+        description: FreshMart application credentials submitted as JSON or Form URL-encoded
+          data.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              ceo_login:
+                summary: CEO Account (Full Access)
+                description: Login as CEO with full enterprise-wide visibility.
+                value:
+                  username: ceo
+                  password: CeoPassword123!
+              sales_manager_login:
+                summary: Sales Manager Account
+                description: Login as Sales Manager with sales, CRM, and inventory
+                  permissions.
+                value:
+                  username: sales.manager
+                  password: SalesPassword123!
+              finance_manager_login:
+                summary: Finance Manager Account
+                description: Login as Finance Manager with P&L, profit, and expense
+                  access.
+                value:
+                  username: finance.manager
+                  password: FinancePassword123!
+              hr_manager_login:
+                summary: HR Manager Account
+                description: Login as HR Manager with employee salary inspection rights.
+                value:
+                  username: hr.manager
+                  password: HrPassword123!
+              admin_login:
+                summary: System Administrator
+                description: Login as Technical Administrator for user and role management.
+                value:
+                  username: admin
+                  password: AdminPassword123!
+          application/x-www-form-urlencoded:
+            schema:
+              properties:
+                username:
+                  type: string
+                  description: Application username (e.g., ceo, sales.manager, admin)
+                  example: ceo
+                password:
+                  type: string
+                  format: password
+                  description: Application password
+                  example: CeoPassword123!
+                grant_type:
+                  type: string
+                  default: password
+              type: object
+              required:
+              - username
+              - password
+        required: true
+      responses:
+        '200':
+          description: User successfully authenticated. JWT access token and user
+            profile returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: 'Bad Request: Missing username or password, or malformed request
+            payload.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '401':
+          description: 'Unauthorized: Incorrect username or password.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '403':
+          description: 'Forbidden: User account is inactive or disabled by system
+            administrator.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '422':
+          description: 'Validation Error: Request payload could not be processed.'
+  /api/v1/auth/me:
+    get:
+      tags:
+      - Authentication
+      summary: Get Current Authenticated User Profile
+      description: Returns profile information, role metadata, and granted RBAC permission
+        codes for the currently authenticated user identified by the verified JWT
+        access token.
+      operationId: getCurrentUserProfile
+      responses:
+        '200':
+          description: User profile and granted permissions successfully retrieved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          description: 'Unauthorized: Missing, invalid, or expired JWT access token.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '403':
+          description: 'Forbidden: User account is inactive or disabled.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+      security:
+      - bearerAuth: []
+      - OAuth2PasswordBearer: []
+  /api/v1/admin/users:
+    get:
+      tags:
+      - User Management
+      summary: List All Registered Application Users
+      description: 'Retrieves a complete list of all FreshMart application user accounts,
+        including their assigned role, granted permission codes, workforce employee
+        linkage, and active status.
+
+
+        **Authorization:** Requires `MANAGE_USERS` permission (granted to `ADMIN`).'
+      operationId: listAllApplicationUsers
+      responses:
+        '200':
+          description: List of all user accounts successfully retrieved.
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/UserResponse'
+                type: array
+                title: Response 200 Listallapplicationusers
+        '401':
+          description: 'Unauthorized: Missing, invalid, or expired JWT access token.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '403':
+          description: 'Forbidden: User lacks the required ''MANAGE_USERS'' permission.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+      security:
+      - bearerAuth: []
+      - OAuth2PasswordBearer: []
+    post:
+      tags:
+      - User Management
+      summary: Provision New Application User Account
+      description: 'Provisions a new FreshMart user account with secure bcrypt password
+        hashing and associates it with an existing application role.
+
+
+        **Authorization:** Requires `MANAGE_USERS` permission (granted to `ADMIN`).'
+      operationId: createApplicationUser
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+        required: true
+      responses:
+        '201':
+          description: User account created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: 'Bad Request: Username or email already exists in system.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '401':
+          description: 'Unauthorized: Missing, invalid, or expired JWT access token.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '403':
+          description: 'Forbidden: User lacks the required ''MANAGE_USERS'' permission.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '404':
+          description: 'Not Found: The specified role_id does not exist.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '422':
+          description: 'Validation Error: Invalid payload attributes.'
+      security:
+      - bearerAuth: []
+      - OAuth2PasswordBearer: []
+  /api/v1/admin/users/{user_id}/status:
+    patch:
+      tags:
+      - User Management
+      summary: Activate or Deactivate User Account
+      description: 'Enables or disables an application user account. Deactivated accounts
+        are immediately blocked from logging in and their active JWT sessions are
+        rejected at the authentication barrier.
+
+
+        **Authorization:** Requires `MANAGE_USERS` permission (granted to `ADMIN`).'
+      operationId: updateUserAccountStatus
+      security:
+      - bearerAuth: []
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: User Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserStatusUpdate'
+      responses:
+        '200':
+          description: User account status updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: 'Unauthorized: Missing, invalid, or expired JWT access token.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '403':
+          description: 'Forbidden: User lacks the required ''MANAGE_USERS'' permission.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '404':
+          description: 'Not Found: User with specified user_id not found.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '422':
+          description: 'Validation Error: Invalid user_id or payload.'
+  /api/v1/admin/users/{user_id}/role:
+    patch:
+      tags:
+      - User Management
+      summary: Change User Application Role & Privileges
+      description: 'Reassigns a user''s application role, dynamically changing their
+        granted RBAC permission codes and data domain access across the platform.
+
+
+        **Authorization:** Requires `MANAGE_ROLES` permission (granted to `ADMIN`).'
+      operationId: updateUserApplicationRole
+      security:
+      - bearerAuth: []
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          title: User Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRoleUpdate'
+      responses:
+        '200':
+          description: User role updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: 'Unauthorized: Missing, invalid, or expired JWT access token.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '403':
+          description: 'Forbidden: User lacks the required ''MANAGE_ROLES'' permission.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '404':
+          description: 'Not Found: User or Role ID not found.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '422':
+          description: 'Validation Error: Invalid user_id or role_id.'
+  /api/v1/admin/roles:
+    get:
+      tags:
+      - Role Management
+      summary: List Application Roles & Granted Permission Codes
+      description: 'Returns all 7 FreshMart application roles (ADMIN, CEO, HR_MANAGER,
+        ERP_MANAGER, SALES_MANAGER, INVENTORY_MANAGER, FINANCE_MANAGER) along with
+        their granular permission codes.
+
+
+        **Authorization:** Requires `MANAGE_ROLES` permission (granted to `ADMIN`).'
+      operationId: listApplicationRolesAndPermissions
+      responses:
+        '200':
+          description: Roles and assigned permission codes successfully retrieved.
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/RoleResponse'
+                type: array
+                title: Response 200 Listapplicationrolesandpermissions
+        '401':
+          description: 'Unauthorized: Missing, invalid, or expired JWT access token.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '403':
+          description: 'Forbidden: User lacks the required ''MANAGE_ROLES'' permission.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+      security:
+      - bearerAuth: []
+      - OAuth2PasswordBearer: []
+  /api/v1/chat/message:
+    post:
+      tags:
+      - AI Chatbot
+      summary: Send Conversational Business Inquiry
+      description: 'Role-scoped conversational AI chat endpoint powered by Ollama
+        Llama 3.1 8B:
+
+        1. Authenticates user identity and role from backend JWT.
+
+        2. Injects authoritative system context with permitted business domains.
+
+        3. Queries local Ollama LLM with role-scoped context.
+
+        4. Returns AI response with role and permitted domain metadata.'
+      operationId: sendChatMessage
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatMessageRequest'
+        required: true
+      responses:
+        '200':
+          description: Conversational assistant response generated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessageResponse'
+        '401':
+          description: 'Unauthorized: Missing, invalid, or expired JWT access token.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '422':
+          description: 'Validation Error: Request message payload could not be validated.'
+        '503':
+          description: 'Service Unavailable: Local Ollama LLM engine is offline or
+            unreachable.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+      security:
+      - bearerAuth: []
+      - OAuth2PasswordBearer: []
+  /api/v1/analytics/query:
+    post:
+      tags:
+      - Agentic Analytics
+      summary: Run Natural-Language Business Analytics Query
+      description: 'Accepts a natural-language business analytics question and processes
+        it through the authenticated LangGraph multi-agent pipeline with Model Context
+        Protocol (MCP) database access.
+
+
+        ### Processing Workflow:
+
+        1. **Identity & RBAC Verification:** Authenticates user identity and enforces
+        domain permissions (e.g., `VIEW_SALES`, `VIEW_INVENTORY`, `VIEW_FINANCE`,
+        `VIEW_EMPLOYEE_SALARY`). Unauthorized inquiries are immediately rejected with
+        HTTP 403 Forbidden before reaching AI or database layers.
+
+        2. **Dynamic Schema Discovery:** Queries FreshMart database schema through
+        MCP `describe_table` tool.
+
+        3. **Read-Only SQL Generation:** Local Qwen 2.5-Coder model synthesizes precision
+        analytical SQL.
+
+        4. **Security Validation:** AST parser and regex validator reject non-SELECT,
+        destructive, or unauthorized SQL.
+
+        5. **MCP Tool Execution:** Executes SQL strictly through read-only MCP database
+        interface with row bounds.
+
+        6. **Multi-Agent Synthesis:** Llama 3.1 8B synthesizes grounded executive
+        answers, calculates root-cause factors (for variance inquiries), extracts
+        data provenance citations, and recommends chart visualization types.'
+      operationId: runNaturalLanguageAnalyticsQuery
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalyticsQueryRequest'
+            examples:
+              sales_trend:
+                summary: Sales Trend (12 Months)
+                description: Analyzes historical sales orders and returns monthly
+                  revenue velocity.
+                value:
+                  question: Show monthly sales trend for the last 12 months.
+              low_stock:
+                summary: Inventory Status (Low Stock)
+                description: Inspects warehouse inventory levels below product reorder
+                  thresholds.
+                value:
+                  question: Which products are currently low in stock?
+              cross_domain:
+                summary: Cross-Domain (Revenue + Inventory)
+                description: Combines sales order line items with inventory balances
+                  across business databases.
+                value:
+                  question: Which products generated the highest revenue and are currently
+                    low in stock?
+              root_cause:
+                summary: Root-Cause Analysis (August Profit Drop)
+                description: Multi-agent causal diagnostic tracing net margin compression
+                  in August 2026 to emergency freight and produce inflation.
+                value:
+                  question: Why did profit decrease in August?
+              hrms_salary:
+                summary: HRMS (Salaries by Department)
+                description: Workforce analysis calculating department compensation
+                  (Requires VIEW_EMPLOYEE_SALARY).
+                value:
+                  question: Show average employee salary by department.
+        required: true
+      responses:
+        '200':
+          description: Natural-language query successfully planned, executed, and
+            synthesized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsQueryResponse'
+        '400':
+          description: 'Bad Request: Empty question, invalid parameters, or question
+            too short.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '401':
+          description: 'Unauthorized: Missing, invalid, or expired JWT access token.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '403':
+          description: 'Forbidden: Access Denied due to insufficient RBAC domain permissions
+            (e.g. attempting to view employee salary without VIEW_EMPLOYEE_SALARY).'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '422':
+          description: 'Validation Error: Request payload failed schema validation.'
+        '500':
+          description: 'Internal Server Error: Pipeline execution or SQL synthesis
+            failed.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+      security:
+      - bearerAuth: []
+      - OAuth2PasswordBearer: []
+  /api/v1/analytics/dashboard:
+    get:
+      tags:
+      - Executive Dashboard
+      summary: Get Executive Dashboard KPIs & Sales Velocity Trends
+      description: 'Returns live, deterministic FreshMart executive metrics queried
+        directly from the MySQL enterprise database:
+
+        - **Executive KPI Cards:** Total Revenue, Customers, Orders, Active Employees
+        with period comparison percentages.
+
+        - **12-Month Sales Velocity:** Monthly historical revenue and order volume
+        trends.
+
+        - **Category Distribution:** Revenue breakdown across retail catalog categories.
+
+        - **Top Performing SKUs:** High-velocity products with active warehouse stock
+        balances.
+
+        - **Telemetry Insights:** Grounded alerts on inventory reorder levels and
+        financial variances.'
+      operationId: getExecutiveDashboardMetrics
+      security:
+      - bearerAuth: []
+      - OAuth2PasswordBearer: []
+      parameters:
+      - name: range
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(today|7d|30d|90d|12m|custom)$
+          description: 'Date range filter window: today, 7d, 30d, 90d, 12m'
+          default: 12m
+          title: Range
+        description: 'Date range filter window: today, 7d, 30d, 90d, 12m'
+        example: 12m
+      responses:
+        '200':
+          description: Executive dashboard metrics calculated and returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+        '401':
+          description: 'Unauthorized: Missing, invalid, or expired JWT access token.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+        '422':
+          description: 'Validation Error: Invalid date range filter parameter.'
+  /api/v1/analytics/insights:
+    get:
+      tags:
+      - Executive Dashboard
+      summary: Get Enterprise Insights, Anomalies & Strategic Recommendations
+      description: 'Returns live structured FreshMart enterprise insights, anomalies,
+        and recommendations strictly grounded in MySQL ledger data for the Insights
+        dashboard.
+
+
+        Includes automated detection of the August 2026 profit contraction, emergency
+        air freight spikes, and warehouse safety stock deficit alerts.'
+      operationId: getEnterpriseInsightsAndAnomalies
+      responses:
+        '200':
+          description: Enterprise insights, statistical anomalies, and recommendations
+            retrieved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnterpriseInsightsResponse'
+        '401':
+          description: 'Unauthorized: Missing, invalid, or expired JWT access token.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPError'
+      security:
+      - bearerAuth: []
+      - OAuth2PasswordBearer: []
+  /:
+    get:
+      tags:
+      - General
+      summary: API Welcome & Service Metadata
+      description: Returns basic application metadata, active environment, and links
+        to documentation.
+      operationId: getRootServiceInfo
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /health:
+    get:
+      tags:
+      - Health & Diagnostics
+      summary: API Health Check (Liveness Probe)
+      description: Lightweight liveness probe endpoint returning basic operational
+        status.
+      operationId: getLivenessHealthCheck
+      responses:
+        '200':
+          description: API is online and accepting connections.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthSimpleResponse'
+  /api/v1/health:
+    get:
+      tags:
+      - Health & Diagnostics
+      summary: Detailed System & Services Diagnostic Check
+      description: 'Performs real-time connectivity and readiness diagnostics across
+        all FreshMart backend dependencies:
+
+        - FastAPI Web Server
+
+        - Ollama LLM Service & Required Models (`llama3.1:8b`, `qwen2.5-coder:7b`)
+
+        - FreshMart MySQL Business Database
+
+        - PostgreSQL Authentication Database'
+      operationId: getDetailedSystemHealthCheck
+      responses:
+        '200':
+          description: Complete service diagnostic report returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthDetailedResponse'
+components:
+  schemas:
+    ActionableRecommendation:
+      properties:
+        title:
+          type: string
+          title: Title
+          description: Recommendation action title
+          example: Emergency Freight Cost Controls
+        reason:
+          type: string
+          title: Reason
+          description: Underlying business justification grounded in telemetry
+        priority:
+          type: string
+          title: Priority
+          description: 'Execution priority: HIGH, MEDIUM, LOW'
+          default: HIGH
+          example: HIGH
+        related_domain:
+          type: string
+          title: Related Domain
+          description: Business operational domain
+          example: Finance
+        suggested_action:
+          type: string
+          title: Suggested Action
+          description: Specific operational action recommended for leadership
+      type: object
+      required:
+      - title
+      - reason
+      - related_domain
+      - suggested_action
+      title: ActionableRecommendation
+      description: Targeted actionable recommendation synthesized by business agents.
+    AnalyticsDataPayload:
+      properties:
+        columns:
+          items:
+            type: string
+          type: array
+          title: Columns
+          description: List of column names returned by query
+          example:
+          - month
+          - revenue
+          - orders
+        rows:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Rows
+          description: List of row objects mapping column name to value
+        row_count:
+          type: integer
+          title: Row Count
+          description: Total number of records returned
+          default: 0
+          example: 12
+        truncated:
+          type: boolean
+          title: Truncated
+          description: Flag indicating if results were capped by safety limit
+          default: false
+          example: false
+      type: object
+      title: AnalyticsDataPayload
+      description: Tabular database query result payload.
+    AnalyticsQueryRequest:
+      properties:
+        question:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Question
+          description: Natural-language business analytics question.
+          example: Show monthly sales trend for the last 12 months.
+        conversation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conversation Id
+          description: Optional conversation session ID for contextual conversational
+            memory across turns.
+          example: session-marketing-01
+      type: object
+      required:
+      - question
+      title: AnalyticsQueryRequest
+      description: Natural-language business question submitted to the multi-agent
+        analytics pipeline.
+      examples:
+      - question: Show monthly sales trend for the last 12 months.
+      - question: Which products are currently low in stock?
+      - question: Which products generated the highest revenue and are currently low
+          in stock?
+      - question: Why did profit decrease in August?
+      - question: Show average employee salary by department.
+    AnalyticsQueryResponse:
+      properties:
+        success:
+          type: boolean
+          title: Success
+          description: Indicates whether query completed successfully without errors
+          example: true
+        question:
+          type: string
+          title: Question
+          description: The original natural-language question processed
+          example: Why did profit decrease in August?
+        answer:
+          type: string
+          title: Answer
+          description: Grounded executive answer synthesized from database query results
+        data:
+          $ref: '#/components/schemas/AnalyticsDataPayload'
+          description: Structured tabular result payload returned from read-only MCP
+            database tool
+        intent:
+          additionalProperties: true
+          type: object
+          title: Intent
+          description: Classified intent, domains, and analytical requirements
+        sources:
+          items:
+            anyOf:
+            - $ref: '#/components/schemas/DataSourceCitation'
+            - additionalProperties: true
+              type: object
+            - type: string
+          type: array
+          title: Sources
+          description: Provenance citations for tables consulted
+        columns_used:
+          items:
+            type: string
+          type: array
+          title: Columns Used
+          description: Columns referenced in SQL execution
+          example:
+          - net_profit
+          - cogs
+          - expenses
+        visualization_hint:
+          anyOf:
+          - $ref: '#/components/schemas/VisualizationHintModel'
+          - additionalProperties: true
+            type: object
+          - type: string
+          title: Visualization Hint
+          description: Frontend charting hint (chart type, axes, title)
+          default: table
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+          description: Error explanation if execution failed or access was denied
+        user_role:
+          type: string
+          title: User Role
+          description: Role of the authenticated requesting user
+          example: CEO
+        user_name:
+          type: string
+          title: User Name
+          description: Full display name of the requesting user
+          example: Vikram Malhotra
+        timestamp:
+          type: string
+          format: date-time
+          title: Timestamp
+          description: UTC timestamp of response generation
+        investigation_plan:
+          anyOf:
+          - $ref: '#/components/schemas/InvestigationPlan'
+          - type: 'null'
+          description: Investigation plan formulated by multi-agent planner
+        root_cause_analysis:
+          anyOf:
+          - $ref: '#/components/schemas/RootCauseAnalysis'
+          - type: 'null'
+          description: Detailed causal decomposition for profit, margin, or cost variance
+            inquiries
+        comparisons:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ComparisonMetric'
+            type: array
+          - type: 'null'
+          title: Comparisons
+          description: Period-over-period variance metrics
+        trends:
+          anyOf:
+          - $ref: '#/components/schemas/TrendSummary'
+          - type: 'null'
+          description: Directional trend analysis
+        anomalies:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/AnomalyItem'
+            type: array
+          - type: 'null'
+          title: Anomalies
+          description: Detected statistical anomalies
+        insights:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/BusinessInsightItem'
+            type: array
+          - type: 'null'
+          title: Insights
+          description: Grounded business insights
+        recommendations:
+          anyOf:
+          - items:
+              $ref: '#/components/schemas/ActionableRecommendation'
+            type: array
+          - type: 'null'
+          title: Recommendations
+          description: Actionable business recommendations
+        confidence:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Confidence
+          description: Confidence level of generated response (HIGH, MEDIUM, LOW)
+          default: HIGH
+          example: HIGH
+      type: object
+      required:
+      - success
+      - question
+      - answer
+      - data
+      - user_role
+      - user_name
+      title: AnalyticsQueryResponse
+      description: Comprehensive analytics response returned by the LangGraph multi-agent
+        pipeline.
+    AnomalyItem:
+      properties:
+        metric:
+          type: string
+          title: Metric
+          description: Anomalous business metric
+          example: Emergency Shipping
+        period:
+          type: string
+          title: Period
+          description: Period of anomalous occurrence
+          example: August 2026
+        value:
+          type: number
+          title: Value
+          description: Observed anomalous metric value
+          example: 430000.0
+        baseline:
+          type: number
+          title: Baseline
+          description: Benchmark expected value
+          example: 89326.0
+        change_percent:
+          type: number
+          title: Change Percent
+          description: Percentage departure from baseline
+          example: 381.4
+        anomaly:
+          type: boolean
+          title: Anomaly
+          description: Flag confirming anomaly detection
+          default: true
+          example: true
+        severity:
+          type: string
+          title: Severity
+          description: 'Severity classification: HIGH, MEDIUM, LOW'
+          default: HIGH
+          example: HIGH
+      type: object
+      required:
+      - metric
+      - period
+      - value
+      - baseline
+      - change_percent
+      title: AnomalyItem
+      description: Statistical business anomaly or threshold breach detected in ledger
+        data.
+    BusinessInsightItem:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Unique insight tracking code
+          example: INS-01
+        title:
+          type: string
+          title: Title
+          description: Headline insight summary
+          example: August Operating Margin Contraction
+        summary:
+          type: string
+          title: Summary
+          description: Comprehensive insight description grounded in data
+        domain:
+          type: string
+          title: Domain
+          description: Business domain (Finance, Sales, Inventory, HR, CRM)
+          example: Finance
+        impact:
+          type: string
+          title: Impact
+          description: Assessed business impact rating
+          default: MEDIUM
+          example: HIGH
+        evidence_metric:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Evidence Metric
+          description: Supporting mathematical metric proof
+          example: Net Profit dropped by 50%
+        recommendation:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Recommendation
+          description: Actionable recommendation to address insight
+      type: object
+      required:
+      - id
+      - title
+      - summary
+      - domain
+      title: BusinessInsightItem
+      description: Grounded business insight synthesized from enterprise telemetry.
+    CategoryPoint:
+      properties:
+        name:
+          type: string
+          title: Name
+          description: Product category name
+          example: Fresh Produce
+        value:
+          type: number
+          title: Value
+          description: Gross category revenue
+          example: 4820000.0
+        color:
+          type: string
+          title: Color
+          description: Hex color code for dashboard chart palette
+          example: '#10B981'
+      type: object
+      required:
+      - name
+      - value
+      - color
+      title: CategoryPoint
+      description: Product category sales distribution point.
+    ChatMessageRequest:
+      properties:
+        message:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Message
+          description: Natural-language conversational message or inquiry.
+          example: What business domains am I authorized to access?
+        conversation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conversation Id
+          description: Optional conversation thread identifier for session continuity.
+          example: chat-session-001
+      type: object
+      required:
+      - message
+      title: ChatMessageRequest
+      description: User conversational inquiry submitted to the AI Chatbot.
+    ChatMessageResponse:
+      properties:
+        reply:
+          type: string
+          title: Reply
+          description: Assistant conversational response generated by local LLM (Llama
+            3.1 8B)
+        conversation_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conversation Id
+          description: Active conversation session identifier
+          example: chat-session-001
+        user_role:
+          type: string
+          title: User Role
+          description: Application role of the authenticated user
+          example: SALES_MANAGER
+        user_name:
+          type: string
+          title: User Name
+          description: Full name of the requesting user
+          example: Arun Kumar
+        allowed_domains:
+          items:
+            type: string
+          type: array
+          title: Allowed Domains
+          description: Business domains the user is authorized to query based on RBAC
+            permissions
+          example:
+          - CRM (Customers & Leads)
+          - Sales & Revenue
+          - ERP & Inventory
+        model_used:
+          type: string
+          title: Model Used
+          description: Ollama LLM model identifier utilized for generation
+          example: llama3.1:8b
+        timestamp:
+          type: string
+          format: date-time
+          title: Timestamp
+          description: UTC timestamp of reply generation
+      type: object
+      required:
+      - reply
+      - user_role
+      - user_name
+      - allowed_domains
+      - model_used
+      title: ChatMessageResponse
+      description: AI chatbot conversational response with authenticated user context.
+    ComparisonMetric:
+      properties:
+        dimension:
+          type: string
+          title: Dimension
+          description: Business dimension or segment
+          example: Fresh Produce
+        current_period:
+          type: string
+          title: Current Period
+          description: Current evaluation period
+          example: August 2026
+        previous_period:
+          type: string
+          title: Previous Period
+          description: Baseline reference period
+          example: July 2026
+        current_value:
+          type: number
+          title: Current Value
+          description: Current value
+          example: 600000.0
+        previous_value:
+          type: number
+          title: Previous Value
+          description: Previous baseline value
+          example: 1200000.0
+        absolute_change:
+          type: number
+          title: Absolute Change
+          description: Absolute variance delta
+          example: -600000.0
+        percentage_change:
+          type: number
+          title: Percentage Change
+          description: Percentage variance delta
+          example: -50.0
+      type: object
+      required:
+      - dimension
+      - current_period
+      - previous_period
+      - current_value
+      - previous_value
+      - absolute_change
+      - percentage_change
+      title: ComparisonMetric
+      description: Comparative period-over-period or dimension-over-dimension metric
+        variance.
+    DashboardInsight:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Unique insight identifier
+          example: INS-01
+        title:
+          type: string
+          title: Title
+          description: Executive summary title
+          example: Consistent Sales Velocity
+        description:
+          type: string
+          title: Description
+          description: Detailed description of the observation
+        category:
+          type: string
+          title: Category
+          description: Business category domain
+          example: Sales
+        impact:
+          type: string
+          title: Impact
+          description: Assessed impact (high, medium, low)
+          example: high
+        date:
+          type: string
+          title: Date
+          description: Telemetry source or audit tag
+          example: Live Telemetry
+        source:
+          type: string
+          title: Source
+          description: Underlying database tables
+          example: sales_orders, sales_order_items
+      type: object
+      required:
+      - id
+      - title
+      - description
+      - category
+      - impact
+      - date
+      - source
+      title: DashboardInsight
+      description: Telemetry-grounded insight displayed on executive dashboard.
+    DashboardKPICard:
+      properties:
+        title:
+          type: string
+          title: Title
+          description: Metric card title
+          example: Total Revenue
+        value:
+          type: string
+          title: Value
+          description: Formatted metric value
+          example: ₹14.82Cr
+        change:
+          type: string
+          title: Change
+          description: Period-over-period percentage growth
+          example: +12.4%
+        isPositive:
+          type: boolean
+          title: Ispositive
+          description: Flag indicating if change direction is favorable
+          example: true
+        periodText:
+          type: string
+          title: Periodtext
+          description: Comparison period context label
+          example: vs previous period
+      type: object
+      required:
+      - title
+      - value
+      - change
+      - isPositive
+      - periodText
+      title: DashboardKPICard
+      description: Executive KPI card summary data.
+    DashboardResponse:
+      properties:
+        range:
+          type: string
+          title: Range
+          description: Date range filter applied (today, 7d, 30d, 90d, 12m)
+          default: 12m
+          example: 12m
+        kpis:
+          items:
+            $ref: '#/components/schemas/DashboardKPICard'
+          type: array
+          title: Kpis
+          description: Executive top-line KPI cards
+        sales_trend:
+          items:
+            $ref: '#/components/schemas/SalesTrendPoint'
+          type: array
+          title: Sales Trend
+          description: Historical sales revenue and order counts trend
+        category_distribution:
+          items:
+            $ref: '#/components/schemas/CategoryPoint'
+          type: array
+          title: Category Distribution
+          description: Product category sales revenue distribution
+        top_products:
+          items:
+            $ref: '#/components/schemas/TopProductPoint'
+          type: array
+          title: Top Products
+          description: Top performing SKUs with inventory stock balances
+        insights:
+          items:
+            $ref: '#/components/schemas/DashboardInsight'
+          type: array
+          title: Insights
+          description: Live grounded executive insights and alerts
+      type: object
+      required:
+      - kpis
+      - sales_trend
+      - category_distribution
+      - top_products
+      - insights
+      title: DashboardResponse
+      description: Deterministic executive dashboard payload queried directly from
+        FreshMart MySQL.
+    DataSourceCitation:
+      properties:
+        table:
+          type: string
+          title: Table
+          description: Database table consulted via read-only MCP access
+          example: company_financials
+        columns:
+          items:
+            type: string
+          type: array
+          title: Columns
+          description: Table columns queried
+          example:
+          - month_name
+          - net_profit
+          - cogs
+          - operating_expenses
+        purpose:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Purpose
+          description: Analytical purpose of consulting this table
+          example: Compute monthly net profit and margin changes
+      type: object
+      required:
+      - table
+      title: DataSourceCitation
+      description: Data provenance citation identifying tables and columns used to
+        generate answer.
+    EnterpriseAnomalyCard:
+      properties:
+        metric:
+          type: string
+          title: Metric
+          description: Name of the anomalous metric
+          example: Emergency Shipping Expense
+        period:
+          type: string
+          title: Period
+          description: Time period where anomaly occurred
+          example: August 2026
+        value:
+          type: number
+          title: Value
+          description: Observed anomalous metric value
+          example: 430000.0
+        baseline:
+          type: number
+          title: Baseline
+          description: Normal baseline benchmark value
+          example: 89326.0
+        change_percent:
+          type: number
+          title: Change Percent
+          description: Percentage departure from baseline
+          example: 381.4
+        anomaly:
+          type: boolean
+          title: Anomaly
+          description: Boolean flag confirming anomalous deviation
+          default: true
+          example: true
+        severity:
+          type: string
+          title: Severity
+          description: Anomaly severity rating (HIGH, MEDIUM, LOW)
+          default: HIGH
+          example: HIGH
+      type: object
+      required:
+      - metric
+      - period
+      - value
+      - baseline
+      - change_percent
+      title: EnterpriseAnomalyCard
+      description: Statistical anomaly card detected across business metrics.
+    EnterpriseInsightCard:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Unique insight tracking identifier
+          example: INS-FIN-01
+        category:
+          type: string
+          title: Category
+          description: Business category domain
+          example: Financial Insights
+        title:
+          type: string
+          title: Title
+          description: Executive headline
+          example: August 2026 Margin Contraction
+        summary:
+          type: string
+          title: Summary
+          description: Detailed narrative explanation grounded in ledger telemetry
+        metric:
+          type: string
+          title: Metric
+          description: Primary headline metric
+          example: 'Net Profit: ₹600,000'
+        change:
+          type: string
+          title: Change
+          description: Period-over-period percentage or absolute delta
+          example: -50.0%
+        impact:
+          type: string
+          title: Impact
+          description: Business impact level (HIGH, MEDIUM, LOW)
+          default: MEDIUM
+          example: HIGH
+        evidence:
+          type: string
+          title: Evidence
+          description: Source database tables or columns proving this insight
+          example: company_financials
+        recommendation:
+          type: string
+          title: Recommendation
+          description: Strategic or operational recommendation to address the finding
+      type: object
+      required:
+      - id
+      - category
+      - title
+      - summary
+      - metric
+      - change
+      - evidence
+      - recommendation
+      title: EnterpriseInsightCard
+      description: Card representing an enterprise insight on the insights dashboard.
+    EnterpriseInsightsResponse:
+      properties:
+        success:
+          type: boolean
+          title: Success
+          description: Query execution status
+          default: true
+          example: true
+        insights:
+          items:
+            $ref: '#/components/schemas/EnterpriseInsightCard'
+          type: array
+          title: Insights
+          description: List of synthesized enterprise insights
+        anomalies:
+          items:
+            $ref: '#/components/schemas/EnterpriseAnomalyCard'
+          type: array
+          title: Anomalies
+          description: List of detected business anomalies
+        timestamp:
+          type: string
+          format: date-time
+          title: Timestamp
+          description: UTC timestamp of telemetry calculation
+      type: object
+      required:
+      - insights
+      title: EnterpriseInsightsResponse
+      description: Structured enterprise insights, anomalies, and recommendations
+        grounded in MySQL ledger data.
+    HTTPError:
+      properties:
+        detail:
+          type: string
+          title: Detail
+          description: Human-readable explanation of why the request failed.
+          example: 'Access Denied: You do not have permission ''VIEW_EMPLOYEE_SALARY''.'
+      type: object
+      required:
+      - detail
+      title: HTTPError
+      description: Standard RFC 7807-compatible error response detail.
+    HealthDetailedResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+          description: Overall system health status (healthy, degraded, offline)
+          default: healthy
+          example: healthy
+        python_version:
+          type: string
+          title: Python Version
+          description: Python runtime environment version
+          example: 3.13.15
+        services:
+          $ref: '#/components/schemas/HealthServicesMap'
+          description: Detailed statuses of connected backend dependencies
+      type: object
+      required:
+      - python_version
+      - services
+      title: HealthDetailedResponse
+      description: Detailed health check response model with component diagnostics.
+    HealthServicesMap:
+      properties:
+        fastapi:
+          $ref: '#/components/schemas/ServiceFastAPIInfo'
+          description: FastAPI web application status
+        ollama:
+          $ref: '#/components/schemas/ServiceOllamaInfo'
+          description: Ollama local LLM engine status
+        mysql:
+          $ref: '#/components/schemas/ServiceDatabaseInfo'
+          description: MySQL business database status
+        postgresql:
+          $ref: '#/components/schemas/ServiceDatabaseInfo'
+          description: PostgreSQL auth database status
+      type: object
+      required:
+      - fastapi
+      - ollama
+      - mysql
+      - postgresql
+      title: HealthServicesMap
+    HealthSimpleResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+          description: Liveness status of the backend API
+          default: ok
+          example: ok
+      type: object
+      title: HealthSimpleResponse
+      description: Liveness probe response model.
+    InvestigationPlan:
+      properties:
+        goal:
+          type: string
+          title: Goal
+          description: High-level analytical investigation objective
+          example: Diagnose August 2026 profit contraction
+        steps:
+          items:
+            type: string
+          type: array
+          title: Steps
+          description: Sequential diagnostic investigation steps
+        focus_metrics:
+          items:
+            type: string
+          type: array
+          title: Focus Metrics
+          description: Target metrics examined during investigation
+          example:
+          - revenue
+          - cogs
+          - expenses
+          - net_profit
+      type: object
+      required:
+      - goal
+      title: InvestigationPlan
+      description: Diagnostic multi-step plan formulated by the Investigation Planner
+        agent.
+    RoleResponse:
+      properties:
+        role_id:
+          type: integer
+          title: Role Id
+          description: Unique role identifier
+          example: 5
+        role_name:
+          type: string
+          title: Role Name
+          description: Unique role name
+          example: SALES_MANAGER
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+          description: Role purpose description
+          example: Sales Manager. Customers, CRM, orders, and sales trends.
+        permissions:
+          items:
+            type: string
+          type: array
+          title: Permissions
+          description: List of permission codes assigned to this role
+          example:
+          - VIEW_CRM
+          - VIEW_SALES
+          - VIEW_INVENTORY
+      type: object
+      required:
+      - role_id
+      - role_name
+      - permissions
+      title: RoleResponse
+      description: Application role representation with assigned permissions.
+    RootCauseAnalysis:
+      properties:
+        analysis_type:
+          type: string
+          title: Analysis Type
+          description: Analysis classification type
+          default: ROOT_CAUSE
+          example: ROOT_CAUSE
+        summary:
+          type: string
+          title: Summary
+          description: Executive summary explaining root cause findings
+        period:
+          additionalProperties:
+            type: string
+          type: object
+          title: Period
+          description: Comparative time periods
+        metrics:
+          additionalProperties: true
+          type: object
+          title: Metrics
+          description: Comparative summary metrics
+        factors:
+          items:
+            $ref: '#/components/schemas/RootCauseFactor'
+          type: array
+          title: Factors
+          description: Ranked contributing causal factors
+        confidence:
+          type: string
+          title: Confidence
+          description: Synthesis confidence rating
+          default: HIGH
+          example: HIGH
+        sources:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Sources
+          description: Underlying telemetry sources
+      type: object
+      required:
+      - summary
+      title: RootCauseAnalysis
+      description: Structured root-cause decomposition for margin, profit, or cost
+        variances.
+    RootCauseFactor:
+      properties:
+        factor:
+          type: string
+          title: Factor
+          description: Description of the contributing variance driver
+          example: Emergency Freight Surge
+        previous_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Previous Value
+          description: Baseline period metric value
+          example: 89326.0
+        current_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Current Value
+          description: Current period metric value
+          example: 430000.0
+        change:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Change
+          description: Absolute variance delta
+          example: 340674.0
+        change_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Change Pct
+          description: Percentage variance delta
+          example: 381.4
+        impact:
+          type: string
+          title: Impact
+          description: Impact orientation (negative or positive)
+          default: negative
+          example: negative
+        confidence:
+          type: string
+          title: Confidence
+          description: Confidence assessment (HIGH, MEDIUM, LOW)
+          default: HIGH
+          example: HIGH
+        source:
+          items:
+            type: string
+          type: array
+          title: Source
+          description: Database tables backing this finding
+          example:
+          - expenses
+      type: object
+      required:
+      - factor
+      title: RootCauseFactor
+      description: Specific variance factor identified during root-cause analysis.
+    SalesTrendPoint:
+      properties:
+        month:
+          type: string
+          title: Month
+          description: Month and year label
+          example: Aug 26
+        revenue:
+          type: number
+          title: Revenue
+          description: Total monthly gross sales revenue
+          example: 12450000.0
+        orders:
+          type: integer
+          title: Orders
+          description: Total number of completed sales orders
+          example: 1420
+      type: object
+      required:
+      - month
+      - revenue
+      - orders
+      title: SalesTrendPoint
+      description: Monthly historical sales velocity data point.
+    ServiceDatabaseInfo:
+      properties:
+        status:
+          type: string
+          title: Status
+          description: Database connection status
+          default: online
+          example: online
+        host:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Host
+          description: Database host endpoint
+          example: localhost:3306
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+          description: Database server software version
+          example: 8.0.36
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+          description: Error message if offline
+      type: object
+      title: ServiceDatabaseInfo
+    ServiceFastAPIInfo:
+      properties:
+        status:
+          type: string
+          title: Status
+          description: FastAPI server execution status
+          default: online
+          example: online
+      type: object
+      title: ServiceFastAPIInfo
+    ServiceOllamaInfo:
+      properties:
+        status:
+          type: string
+          title: Status
+          description: Ollama LLM service connectivity status
+          default: online
+          example: online
+        url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Url
+          description: Configured Ollama base endpoint
+          example: http://localhost:11434
+        available_models:
+          items:
+            type: string
+          type: array
+          title: Available Models
+          description: Models currently pulled and available in Ollama
+          example:
+          - llama3.1:8b
+          - qwen2.5-coder:7b
+        required_sql_model:
+          type: string
+          title: Required Sql Model
+          description: Configured model for SQL generation
+          example: qwen2.5-coder:7b
+        required_agent_model:
+          type: string
+          title: Required Agent Model
+          description: Configured model for multi-agent reasoning
+          example: llama3.1:8b
+        sql_model_ready:
+          type: boolean
+          title: Sql Model Ready
+          description: Whether SQL model is ready
+          default: true
+          example: true
+        agent_model_ready:
+          type: boolean
+          title: Agent Model Ready
+          description: Whether agent model is ready
+          default: true
+          example: true
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error
+          description: Error message if offline
+      type: object
+      required:
+      - required_sql_model
+      - required_agent_model
+      title: ServiceOllamaInfo
+    TokenResponse:
+      properties:
+        access_token:
+          type: string
+          title: Access Token
+          description: Signed JWT Bearer access token containing claims and permissions
+        token_type:
+          type: string
+          title: Token Type
+          description: Token protocol type
+          default: bearer
+          example: bearer
+        user:
+          $ref: '#/components/schemas/UserProfile'
+          description: Authenticated user profile and permissions
+      type: object
+      required:
+      - access_token
+      - user
+      title: TokenResponse
+      description: JWT token response returned upon successful authentication.
+    TopProductPoint:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Product SKU code
+          example: P001
+        name:
+          type: string
+          title: Name
+          description: Product display name
+          example: Organic Alphonso Mangoes
+        category:
+          type: string
+          title: Category
+          description: Product category
+          example: Fresh Produce
+        revenue:
+          type: number
+          title: Revenue
+          description: Total product gross revenue
+          example: 1850000.0
+        orders:
+          type: integer
+          title: Orders
+          description: Quantity ordered
+          example: 450
+        growth:
+          type: string
+          title: Growth
+          description: Period revenue growth rate
+          example: +18.4%
+        stock:
+          type: integer
+          title: Stock
+          description: Current warehouse quantity on hand
+          example: 42
+      type: object
+      required:
+      - id
+      - name
+      - category
+      - revenue
+      - orders
+      - growth
+      - stock
+      title: TopProductPoint
+      description: Top-selling product performance and warehouse inventory balance.
+    TrendSummary:
+      properties:
+        direction:
+          type: string
+          title: Direction
+          description: 'Directional trend velocity: UPWARD, DOWNWARD, STABLE'
+          default: UPWARD
+          example: UPWARD
+        highest_period:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Highest Period
+          description: Peak performing period data point
+        lowest_period:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Lowest Period
+          description: Lowest performing period data point
+        avg_growth_pct:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Avg Growth Pct
+          description: Average period growth rate
+          example: 4.2
+        summary:
+          type: string
+          title: Summary
+          description: Narrative trend explanation
+          default: ''
+      type: object
+      title: TrendSummary
+      description: Time-series directional trend analysis.
+    UserCreate:
+      properties:
+        username:
+          type: string
+          maxLength: 60
+          minLength: 3
+          title: Username
+          description: Unique username for the new account
+          example: anita.finance
+        email:
+          type: string
+          title: Email
+          description: Unique email address
+          example: anita.f@freshmart.local
+        password:
+          type: string
+          minLength: 6
+          title: Password
+          description: Initial plain text password (hashed securely with bcrypt)
+          example: SecurePass2026!
+        full_name:
+          type: string
+          maxLength: 120
+          title: Full Name
+          description: Full display name of the user
+          example: Anita Sharma
+        role_id:
+          type: integer
+          title: Role Id
+          description: 'Role ID to assign to this user (1: ADMIN, 2: CEO, 3: HR_MANAGER,
+            4: ERP_MANAGER, 5: SALES_MANAGER, 6: INVENTORY_MANAGER, 7: FINANCE_MANAGER)'
+          example: 7
+        employee_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Employee Id
+          description: Optional MySQL employee ID to associate
+          example: E010
+      type: object
+      required:
+      - username
+      - email
+      - password
+      - full_name
+      - role_id
+      title: UserCreate
+      description: Payload to provision a new application user account.
+    UserProfile:
+      properties:
+        user_id:
+          type: integer
+          title: User Id
+          description: Unique integer user identifier
+          example: 2
+        username:
+          type: string
+          title: Username
+          description: Unique application username
+          example: ceo
+        email:
+          type: string
+          title: Email
+          description: Corporate email address
+          example: ceo@freshmart.local
+        full_name:
+          type: string
+          title: Full Name
+          description: User's full name
+          example: Vikram Malhotra
+        role:
+          type: string
+          title: Role
+          description: Assigned application role name
+          example: CEO
+        employee_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Employee Id
+          description: Linked MySQL workforce employee ID
+          example: E006
+        permissions:
+          items:
+            type: string
+          type: array
+          title: Permissions
+          description: List of granular RBAC permission codes granted to this user
+          example:
+          - VIEW_HR
+          - VIEW_EMPLOYEE_SALARY
+          - VIEW_CRM
+          - VIEW_SALES
+          - VIEW_INVENTORY
+          - VIEW_PURCHASES
+          - VIEW_FINANCE
+          - VIEW_PROFIT
+          - VIEW_EXPENSES
+        is_active:
+          type: boolean
+          title: Is Active
+          description: Account active status flag
+          default: true
+          example: true
+      type: object
+      required:
+      - user_id
+      - username
+      - email
+      - full_name
+      - role
+      - permissions
+      title: UserProfile
+      description: Current authenticated user profile and granted permissions.
+    UserResponse:
+      properties:
+        user_id:
+          type: integer
+          title: User Id
+          description: Unique user identifier
+          example: 1
+        username:
+          type: string
+          title: Username
+          description: Unique username
+          example: admin
+        email:
+          type: string
+          title: Email
+          description: Email address
+          example: admin@freshmart.local
+        full_name:
+          type: string
+          title: Full Name
+          description: Display name
+          example: Technical Administrator
+        role_id:
+          type: integer
+          title: Role Id
+          description: Foreign key reference to assigned role
+          example: 1
+        role_name:
+          type: string
+          title: Role Name
+          description: Name of assigned role
+          example: ADMIN
+        employee_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Employee Id
+          description: Linked MySQL workforce ID
+        is_active:
+          type: boolean
+          title: Is Active
+          description: Whether user account is active
+          example: true
+        permissions:
+          items:
+            type: string
+          type: array
+          title: Permissions
+          description: List of granular permission codes granted via role
+          example:
+          - MANAGE_USERS
+          - MANAGE_ROLES
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+          description: Account creation UTC timestamp
+      type: object
+      required:
+      - user_id
+      - username
+      - email
+      - full_name
+      - role_id
+      - role_name
+      - is_active
+      - permissions
+      - created_at
+      title: UserResponse
+      description: Detailed user account representation.
+    UserRoleUpdate:
+      properties:
+        role_id:
+          type: integer
+          title: Role Id
+          description: ID of the new role to assign
+          example: 5
+      type: object
+      required:
+      - role_id
+      title: UserRoleUpdate
+      description: Payload to reassign a user's application role.
+    UserStatusUpdate:
+      properties:
+        is_active:
+          type: boolean
+          title: Is Active
+          description: Set true to enable account, false to deactivate account
+          example: false
+      type: object
+      required:
+      - is_active
+      title: UserStatusUpdate
+      description: Payload to activate or deactivate a user account.
+    VisualizationHintModel:
+      properties:
+        type:
+          type: string
+          title: Type
+          description: 'Chart type: line, bar, area, pie, donut, table, kpi'
+          default: table
+          example: line
+        x_axis:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X Axis
+          description: Field name for horizontal X-axis
+          example: month
+        y_axis:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Y Axis
+          description: Field name for vertical Y-axis
+          example: revenue
+        series:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
+          title: Series
+          description: Series field names for multi-dimensional comparisons
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Title
+          description: Recommended chart title for dashboard display
+          example: 12-Month Sales Velocity
+      type: object
+      title: VisualizationHintModel
+      description: Frontend charting and visualization recommendation.
+    LoginRequest:
+      description: User login request payload.
+      examples:
+      - password: CeoPassword123!
+        username: ceo
+      - password: SalesPassword123!
+        username: sales.manager
+      - password: HrPassword123!
+        username: hr.manager
+      - password: AdminPassword123!
+        username: admin
+      properties:
+        username:
+          description: Application username (e.g. ceo, sales.manager, admin)
+          example: ceo
+          title: Username
+          type: string
+        password:
+          description: Application account password
+          example: CeoPassword123!
+          title: Password
+          type: string
+      required:
+      - username
+      - password
+      title: LoginRequest
+      type: object
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT Authorization header using the Bearer scheme. Enter token directly
+        or as 'Bearer <token>'.
+    OAuth2PasswordBearer:
+      type: oauth2
+      description: 'OAuth2 Password Flow: Authenticate using username and password'
+      flows:
+        password:
+          scopes: {}
+          tokenUrl: /api/v1/auth/login
+tags:
+- name: Authentication
+  description: User authentication, JWT token issuance, session verification, and
+    permission introspection.
+- name: Agentic Analytics
+  description: Natural-language enterprise analytics powered by LangGraph multi-agent
+    orchestration and MCP database access.
+- name: Executive Dashboard
+  description: Deterministic real-time KPI metrics, sales velocity trends, category
+    distributions, and business telemetry.
+- name: User Management
+  description: Administrative endpoints to list, provision, activate, and deactivate
+    application users (Requires MANAGE_USERS permission).
+- name: Role Management
+  description: Administrative endpoints to inspect roles and assign permissions (Requires
+    MANAGE_ROLES permission).
+- name: AI Chatbot
+  description: Role-scoped conversational AI assistant for business guidance and general
+    analytics inquiries.
+- name: Health & Diagnostics
+  description: Liveness probes and diagnostic health checks for FastAPI, Ollama LLM,
+    MySQL, and PostgreSQL services.
+- name: General
+  description: General service metadata and root greeting.

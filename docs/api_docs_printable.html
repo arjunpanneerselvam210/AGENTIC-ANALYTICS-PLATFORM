@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FreshMart Agentic Analytics API — Developer Reference</title>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 18mm 16mm 20mm 16mm;
+    @bottom-right {
+      content: counter(page);
+    }
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1e293b;
+    line-height: 1.55;
+    font-size: 13px;
+    background: #ffffff;
+    margin: 0;
+    padding: 0;
+  }
+
+  h1, h2, h3, h4 {
+    color: #0f172a;
+    font-weight: 700;
+    margin-top: 1.4em;
+    margin-bottom: 0.5em;
+  }
+
+  h1 { font-size: 24px; border-bottom: 2px solid #059669; padding-bottom: 6px; }
+  h2 { font-size: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; color: #047857; margin-top: 1.8em; }
+  h3 { font-size: 14.5px; color: #1e293b; }
+  h4 { font-size: 13px; color: #334155; }
+
+  p { margin: 0.5em 0; }
+
+  /* Cover Page */
+  .cover {
+    page-break-after: always;
+    padding: 60px 20px 40px 20px;
+    text-align: center;
+  }
+  .cover-badge {
+    display: inline-block;
+    background: #ecfdf5;
+    color: #047857;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    border: 1px solid #a7f3d0;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+  .cover-title {
+    font-size: 32px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.25;
+    margin: 0 0 16px 0;
+  }
+  .cover-subtitle {
+    font-size: 16px;
+    color: #475569;
+    max-width: 600px;
+    margin: 0 auto 30px auto;
+    line-height: 1.5;
+  }
+  .cover-meta {
+    margin-top: 40px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 18px;
+    max-width: 520px;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: left;
+    font-size: 12.5px;
+  }
+  .cover-meta table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .cover-meta td {
+    padding: 4px 8px;
+    border: none;
+  }
+  .cover-meta td:first-child {
+    font-weight: 600;
+    color: #64748b;
+    width: 35%;
+  }
+
+  /* Table styling */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 18px 0;
+    font-size: 12px;
+  }
+  th, td {
+    border: 1px solid #cbd5e1;
+    padding: 7px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background-color: #f1f5f9;
+    color: #0f172a;
+    font-weight: 600;
+  }
+  tr:nth-child(even) {
+    background-color: #f8fafc;
+  }
+
+  /* Endpoint pill badges */
+  .badge {
+    display: inline-block;
+    padding: 2px 7px;
+    font-size: 10.5px;
+    font-weight: 700;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    font-family: Consolas, monospace;
+  }
+  .badge-post { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+  .badge-get  { background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; }
+  .badge-patch{ background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+  .badge-del  { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+
+  .endpoint-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    margin: 16px 0;
+    padding: 12px 14px;
+    background: #ffffff;
+    page-break-inside: avoid;
+  }
+  .endpoint-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13.5px;
+    font-weight: 600;
+    font-family: Consolas, monospace;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+  }
+
+  /* Code blocks */
+  pre, code {
+    font-family: Consolas, "Courier New", monospace;
+  }
+  code {
+    background: #f1f5f9;
+    color: #0f172a;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-size: 11.5px;
+  }
+  pre {
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 12px 14px;
+    border-radius: 6px;
+    font-size: 11px;
+    line-height: 1.45;
+    overflow-x: auto;
+    margin: 8px 0 14px 0;
+    page-break-inside: avoid;
+  }
+  pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+  }
+
+  .callout {
+    border-left: 4px solid #059669;
+    background: #f0fdf4;
+    padding: 10px 14px;
+    margin: 12px 0;
+    border-radius: 0 6px 6px 0;
+    font-size: 12px;
+  }
+  .callout-title {
+    font-weight: 700;
+    color: #065f46;
+    margin-bottom: 3px;
+  }
+
+  .page-break {
+    page-break-before: always;
+  }
+</style>
+</head>
+<body>
+
+<!-- ========================================================================= -->
+<!-- COVER PAGE                                                                -->
+<!-- ========================================================================= -->
+<div class="cover">
+  <div class="cover-badge">Enterprise Technical Specification</div>
+  <h1 class="cover-title">FreshMart Agentic Analytics<br>API Documentation</h1>
+  <div class="cover-subtitle">
+    AI-Powered Natural-Language Analytics Platform Orchestrated with LangGraph, Model Context Protocol (MCP), and Role-Based Access Control
+  </div>
+
+  <div class="cover-meta">
+    <table>
+      <tr><td>API Title:</td><td><strong>FreshMart Agentic Analytics API</strong></td></tr>
+      <tr><td>API Version:</td><td><code>1.0.0</code> (OpenAPI 3.1.0)</td></tr>
+      <tr><td>Base URL:</td><td><code>http://localhost:8000/api/v1</code></td></tr>
+      <tr><td>Interactive Docs:</td><td><code>http://localhost:8000/docs</code></td></tr>
+      <tr><td>Specification:</td><td><code>http://localhost:8000/openapi.json</code></td></tr>
+      <tr><td>Backend Engine:</td><td>FastAPI (Python 3.12 / 3.13)</td></tr>
+      <tr><td>Multi-Agent Layer:</td><td>LangGraph + Ollama (Llama 3.1 & Qwen 2.5-Coder)</td></tr>
+      <tr><td>Database Layer:</td><td>MySQL (Analytics) & PostgreSQL (Auth/RBAC)</td></tr>
+      <tr><td>Tool Protocol:</td><td>Model Context Protocol (MCP)</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- SECTION 1: ARCHITECTURE OVERVIEW                                          -->
+<!-- ========================================================================= -->
+<h2>1. Architectural Overview</h2>
+<p>
+  FreshMart Agentic Analytics provides secure, AI-powered natural-language analytics for FreshMart enterprise business data across retail operations, customer relationship management (CRM), human resources (HRMS), inventory warehousing, purchasing, and financial performance.
+</p>
+
+<h3>Core Engineering Principles</h3>
+<ul>
+  <li><strong>Decoupled Dual-Database Architecture:</strong> High-volume business transactional data resides in <code>MySQL</code> (<code>company_analytics</code>), strictly segregated from authentication credentials, user records, and RBAC rules stored in <code>PostgreSQL</code> (<code>company_auth</code>).</li>
+  <li><strong>Controlled Database Interfacing via MCP:</strong> AI agents never execute arbitrary SQL strings directly on connection pools. All database schema inspection and analytical queries are mediated through a read-only Model Context Protocol (MCP) tool provider with strict AST validation, 1000-row bounds, and query timeouts.</li>
+  <li><strong>Backend-Authoritative RBAC:</strong> User identity and permissions are verified by PostgreSQL JWT before natural-language parsing or query synthesis occurs. Inquiries targeting unauthorized domains are rejected with <code>403 Forbidden</code> at the API barrier.</li>
+  <li><strong>LangGraph Multi-Agent Collaboration:</strong> Specialized agent nodes collaborate sequentially to classify intent, check permissions, inspect schemas, generate read-only SQL, validate queries, plan diagnostic investigations, and synthesize grounded responses.</li>
+</ul>
+
+<div class="callout">
+  <div class="callout-title">Interactive Documentation Links</div>
+  Swagger UI: <a href="http://localhost:8000/docs">http://localhost:8000/docs</a> &bull;
+  ReDoc: <a href="http://localhost:8000/redoc">http://localhost:8000/redoc</a> &bull;
+  OpenAPI JSON: <a href="http://localhost:8000/openapi.json">http://localhost:8000/openapi.json</a>
+</div>
+
+<!-- ========================================================================= -->
+<!-- SECTION 2: AUTHENTICATION & RBAC MATRIX                                   -->
+<!-- ========================================================================= -->
+<div class="page-break"></div>
+<h2>2. Authentication & Role-Based Access Control (RBAC)</h2>
+<p>
+  All analytics, dashboard, administrative, and conversational endpoints enforce JWT Bearer authentication. Requests must present the HTTP header:
+</p>
+<pre><code>Authorization: Bearer &lt;signed_jwt_access_token&gt;</code></pre>
+
+<h3>Available Test & Demo Accounts</h3>
+<p>All demo accounts are pre-seeded in the PostgreSQL authentication database with bcrypt password hashes:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Username</th>
+      <th>Password</th>
+      <th>Role</th>
+      <th>Permitted Business Domains</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>ceo</code></td>
+      <td><code>CeoPassword123!</code></td>
+      <td><code>CEO</code></td>
+      <td>Full enterprise access (Sales, CRM, Inventory, Purchases, Finance, Profit, Expenses, HR, Salaries)</td>
+    </tr>
+    <tr>
+      <td><code>sales.manager</code></td>
+      <td><code>SalesPassword123!</code></td>
+      <td><code>SALES_MANAGER</code></td>
+      <td>Sales orders, customer accounts, leads, product inventory catalog</td>
+    </tr>
+    <tr>
+      <td><code>finance.manager</code></td>
+      <td><code>FinancePassword123!</code></td>
+      <td><code>FINANCE_MANAGER</code></td>
+      <td>Financial statements, net profit margins, operating expenses, sales revenue</td>
+    </tr>
+    <tr>
+      <td><code>hr.manager</code></td>
+      <td><code>HrPassword123!</code></td>
+      <td><code>HR_MANAGER</code></td>
+      <td>Workforce directory, departments, employee compensation & salary records</td>
+    </tr>
+    <tr>
+      <td><code>inventory.manager</code></td>
+      <td><code>InventoryPassword123!</code></td>
+      <td><code>INVENTORY_MANAGER</code></td>
+      <td>Warehouse stock levels, SKU catalogs, supplier purchase orders</td>
+    </tr>
+    <tr>
+      <td><code>erp.manager</code></td>
+      <td><code>ErpPassword123!</code></td>
+      <td><code>ERP_MANAGER</code></td>
+      <td>Integrated purchasing, warehouse stock, sales transactions, expenses, HR</td>
+    </tr>
+    <tr>
+      <td><code>admin</code></td>
+      <td><code>AdminPassword123!</code></td>
+      <td><code>ADMIN</code></td>
+      <td>System administration (create users, enable/disable accounts, inspect roles)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Granular Permissions Specification (11 Total)</h3>
+<table>
+  <thead>
+    <tr>
+      <th>Permission Code</th>
+      <th>Domain</th>
+      <th>Description</th>
+      <th>Assigned Roles</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td><code>VIEW_SALES</code></td><td>Sales</td><td>Sales orders, items, and regional revenue velocity</td><td>CEO, SALES_MGR, ERP_MGR, INV_MGR, FIN_MGR</td></tr>
+    <tr><td><code>VIEW_CRM</code></td><td>CRM</td><td>Customer directory, commercial leads, customer interactions</td><td>CEO, SALES_MGR</td></tr>
+    <tr><td><code>VIEW_INVENTORY</code></td><td>Inventory</td><td>Catalog products, stock-on-hand, safety reorder levels</td><td>CEO, SALES_MGR, ERP_MGR, INV_MGR</td></tr>
+    <tr><td><code>VIEW_PURCHASES</code></td><td>Purchases</td><td>Suppliers and procurement purchase orders</td><td>CEO, ERP_MGR, INV_MGR</td></tr>
+    <tr><td><code>VIEW_FINANCE</code></td><td>Finance</td><td>Overall company revenue and P&L financial statements</td><td>CEO, FINANCE_MGR</td></tr>
+    <tr><td><code>VIEW_PROFIT</code></td><td>Finance</td><td>Net profit, operating margins, root-cause cost variance</td><td>CEO, FINANCE_MGR</td></tr>
+    <tr><td><code>VIEW_EXPENSES</code></td><td>Finance</td><td>Departmental expenditures and logistics costs</td><td>CEO, HR_MGR, ERP_MGR, FINANCE_MGR</td></tr>
+    <tr><td><code>VIEW_HR</code></td><td>HRMS</td><td>Departments, job roles, active employee headcount</td><td>CEO, HR_MGR, ERP_MGR</td></tr>
+    <tr><td><code>VIEW_EMPLOYEE_SALARY</code></td><td>HRMS</td><td>Confidential employee base salaries and bonus records</td><td>CEO, HR_MGR</td></tr>
+    <tr><td><code>MANAGE_USERS</code></td><td>Admin</td><td>Create, edit, activate, and deactivate application users</td><td>ADMIN</td></tr>
+    <tr><td><code>MANAGE_ROLES</code></td><td>Admin</td><td>Inspect and reassign roles and permissions</td><td>ADMIN</td></tr>
+  </tbody>
+</table>
+
+<!-- ========================================================================= -->
+<!-- SECTION 3: AUTHENTICATION APIS                                            -->
+<!-- ========================================================================= -->
+<div class="page-break"></div>
+<h2>3. Authentication Endpoints</h2>
+
+<div class="endpoint-card">
+  <div class="endpoint-header">
+    <span class="badge badge-post">POST</span>
+    <span>/api/v1/auth/login</span>
+  </div>
+  <p><strong>Summary:</strong> Authenticate User & Generate JWT Access Token</p>
+  <p><strong>Operation ID:</strong> <code>loginUser</code></p>
+  <p>
+    Validates user credentials against PostgreSQL bcrypt hashes. Supports both <code>application/json</code> (standard REST API) and <code>application/x-www-form-urlencoded</code> (interactive Swagger UI Authorize dialog).
+  </p>
+  <h4>Request Body (JSON):</h4>
+<pre><code>{
+  "username": "ceo",
+  "password": "CeoPassword123!"
+}</code></pre>
+
+  <h4>Response (200 OK):</h4>
+<pre><code>{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer",
+  "user": {
+    "user_id": 2,
+    "username": "ceo",
+    "email": "ceo@freshmart.local",
+    "full_name": "Vikram Malhotra",
+    "role": "CEO",
+    "employee_id": "E006",
+    "permissions": ["VIEW_HR", "VIEW_EMPLOYEE_SALARY", "VIEW_CRM", "VIEW_SALES", "VIEW_INVENTORY", "VIEW_PURCHASES", "VIEW_FINANCE", "VIEW_PROFIT", "VIEW_EXPENSES"],
+    "is_active": true
+  }
+}</code></pre>
+  <p><strong>Possible Status Codes:</strong> <code>200 OK</code>, <code>400 Bad Request</code>, <code>401 Unauthorized</code>, <code>403 Forbidden</code>, <code>422 Validation Error</code>.</p>
+</div>
+
+<div class="endpoint-card">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span>/api/v1/auth/me</span>
+  </div>
+  <p><strong>Summary:</strong> Get Current Authenticated User Profile</p>
+  <p><strong>Operation ID:</strong> <code>getCurrentUserProfile</code></p>
+  <p>Returns identity, role, and granted permissions for the authenticated bearer token holder.</p>
+  <p><strong>Possible Status Codes:</strong> <code>200 OK</code>, <code>401 Unauthorized</code>, <code>403 Forbidden</code>.</p>
+</div>
+
+<!-- ========================================================================= -->
+<!-- SECTION 4: AGENTIC ANALYTICS API                                          -->
+<!-- ========================================================================= -->
+<div class="page-break"></div>
+<h2>4. Agentic Analytics API</h2>
+
+<div class="endpoint-card">
+  <div class="endpoint-header">
+    <span class="badge badge-post">POST</span>
+    <span>/api/v1/analytics/query</span>
+  </div>
+  <p><strong>Summary:</strong> Run Natural-Language Business Analytics Query</p>
+  <p><strong>Operation ID:</strong> <code>runNaturalLanguageAnalyticsQuery</code></p>
+  <p>
+    Accepts a natural-language business question and executes it through the LangGraph multi-agent pipeline.
+  </p>
+
+  <h4>Multi-Agent Pipeline Stages:</h4>
+  <ol>
+    <li><strong>Request Validator:</strong> Checks input question bounds (1–2000 characters).</li>
+    <li><strong>Intent Classifier:</strong> Classifies domain (Sales, Finance, Inventory, HR, CRM), operation (AGGREGATION, COMPARISON, ROOT_CAUSE), and target tables.</li>
+    <li><strong>Permission Checker:</strong> Evaluates user RBAC codes against target domains. Rejects unauthorized requests with <code>403 Forbidden</code>.</li>
+    <li><strong>Schema Planner:</strong> Calls MCP tool <code>describe_table</code> to dynamically retrieve columns and constraints.</li>
+    <li><strong>SQL Generator:</strong> Qwen 2.5-Coder synthesizes precision read-only SQL.</li>
+    <li><strong>SQL Security Validator:</strong> AST parser verifies query is read-only (SELECT only; blocks INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, OUTFILE).</li>
+    <li><strong>SQL Executor:</strong> Executes validated SQL strictly through MCP with safety row limits.</li>
+    <li><strong>Root-Cause & Investigation Planner:</strong> Formulates diagnostic hypotheses and computes factor variance.</li>
+    <li><strong>Business Analyzer & Response Generator:</strong> Llama 3.1 synthesizes grounded executive answers with data provenance citations.</li>
+  </ol>
+
+  <h4>Request Schema (<code>AnalyticsQueryRequest</code>):</h4>
+  <table>
+    <thead>
+      <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>question</code></td><td>string</td><td>Yes</td><td>Natural-language business analytics question (1-2000 characters)</td></tr>
+      <tr><td><code>conversation_id</code></td><td>string</td><td>No</td><td>Optional session ID for contextual conversational continuity</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Pre-configured OpenAPI Examples:</h4>
+  <ul>
+    <li><strong>Sales Trend:</strong> <code>{"question": "Show monthly sales trend for the last 12 months."}</code></li>
+    <li><strong>Inventory Alert:</strong> <code>{"question": "Which products are currently low in stock?"}</code></li>
+    <li><strong>Cross-Domain:</strong> <code>{"question": "Which products generated the highest revenue and are currently low in stock?"}</code></li>
+    <li><strong>Root-Cause Analysis:</strong> <code>{"question": "Why did profit decrease in August?"}</code></li>
+    <li><strong>Workforce Comp:</strong> <code>{"question": "Show average employee salary by department."}</code></li>
+  </ul>
+</div>
+
+<div class="page-break"></div>
+<h3>Structured Response Schema (<code>AnalyticsQueryResponse</code>)</h3>
+
+<pre><code>{
+  "success": true,
+  "question": "Why did profit decrease in August?",
+  "answer": "Net profit contracted by 50.0% (-₹600,000) from ₹1,200,000 in July to ₹600,000 in August 2026. The primary driver was a +381.4% surge in emergency refrigerated air freight expenditures (₹430,000 vs. ₹89,326 in July) during transport rerouting, coupled with wholesale produce spot-market procurement premiums.",
+  "data": {
+    "columns": ["month_name", "total_revenue", "cogs", "operating_expenses", "net_profit", "profit_margin_pct"],
+    "rows": [
+      {"month_name": "July", "total_revenue": 10500000.0, "cogs": 7100000.0, "operating_expenses": 2200000.0, "net_profit": 1200000.0, "profit_margin_pct": 11.43},
+      {"month_name": "August", "total_revenue": 9800000.0, "cogs": 6900000.0, "operating_expenses": 2300000.0, "net_profit": 600000.0, "profit_margin_pct": 6.12}
+    ],
+    "row_count": 2,
+    "truncated": false
+  },
+  "intent": {
+    "domain": "Finance",
+    "operation": "ROOT_CAUSE",
+    "target_metric": "net_profit"
+  },
+  "sources": [
+    {
+      "table": "company_financials",
+      "columns": ["month_name", "total_revenue", "cogs", "operating_expenses", "net_profit"],
+      "purpose": "Compute monthly profit variances"
+    },
+    {
+      "table": "expenses",
+      "columns": ["expense_date", "category", "amount"],
+      "purpose": "Identify emergency shipping expenditure spike"
+    }
+  ],
+  "columns_used": ["total_revenue", "cogs", "operating_expenses", "net_profit"],
+  "visualization_hint": {
+    "type": "bar",
+    "x_axis": "month_name",
+    "y_axis": "net_profit",
+    "title": "Net Profit Comparison: July vs. August 2026"
+  },
+  "root_cause_analysis": {
+    "analysis_type": "ROOT_CAUSE",
+    "summary": "Profit decreased primarily due to emergency refrigerated freight costs during monsoon supply disruptions.",
+    "period": { "current": "August 2026", "previous": "July 2026" },
+    "metrics": { "profit_change_pct": -50.0, "absolute_profit_delta": -600000.0 },
+    "factors": [
+      {
+        "factor": "Emergency Air Freight Logistics Surge",
+        "previous_value": 89326.0,
+        "current_value": 430000.0,
+        "change": 340674.0,
+        "change_pct": 381.4,
+        "impact": "negative",
+        "confidence": "HIGH",
+        "source": ["expenses"]
+      }
+    ],
+    "confidence": "HIGH"
+  },
+  "recommendations": [
+    {
+      "title": "Institute Emergency Logistics Surcharge Buffers",
+      "reason": "Uncontracted spot-market freight costs eroded 50% of monthly operating margin.",
+      "priority": "HIGH",
+      "related_domain": "Finance",
+      "suggested_action": "Secure secondary contracted regional logistics carriers with fixed surge rate caps."
+    }
+  ],
+  "confidence": "HIGH",
+  "user_role": "CEO",
+  "user_name": "Vikram Malhotra",
+  "timestamp": "2026-09-25T15:20:00Z"
+}</code></pre>
+
+<!-- ========================================================================= -->
+<!-- SECTION 5: EXECUTIVE DASHBOARD & INSIGHTS                                 -->
+<!-- ========================================================================= -->
+<div class="page-break"></div>
+<h2>5. Executive Dashboard & Telemetry APIs</h2>
+
+<div class="endpoint-card">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span>/api/v1/analytics/dashboard</span>
+  </div>
+  <p><strong>Summary:</strong> Get Executive Dashboard KPIs & Sales Velocity Trends</p>
+  <p><strong>Operation ID:</strong> <code>getExecutiveDashboardMetrics</code></p>
+  <p>Returns deterministic, real-time executive dashboard metrics queried directly from FreshMart MySQL.</p>
+  <p><strong>Query Parameters:</strong> <code>range</code> (string, enum: <code>today</code>, <code>7d</code>, <code>30d</code>, <code>90d</code>, <code>12m</code>, default: <code>12m</code>)</p>
+  <h4>Response Structure (<code>DashboardResponse</code>):</h4>
+  <ul>
+    <li><code>kpis</code>: Top-line cards (Total Revenue: ₹14.82Cr, Customers: 1,250, Orders: 14,820, Active Employees: 500).</li>
+    <li><code>sales_trend</code>: 12-month historical monthly revenue and order volumes.</li>
+    <li><code>category_distribution</code>: Sales distribution by category (Fresh Produce, Dairy & Eggs, Snacks, etc.).</li>
+    <li><code>top_products</code>: High-velocity SKUs with active warehouse balances.</li>
+    <li><code>insights</code>: Live telemetry alerts (inventory reorder warnings, August profit anomaly).</li>
+  </ul>
+</div>
+
+<div class="endpoint-card">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span>/api/v1/analytics/insights</span>
+  </div>
+  <p><strong>Summary:</strong> Get Enterprise Insights, Anomalies & Strategic Recommendations</p>
+  <p><strong>Operation ID:</strong> <code>getEnterpriseInsightsAndAnomalies</code></p>
+  <p>Returns structured, grounded insights and detected statistical anomalies calculated from ledger telemetry.</p>
+  <h4>Response Structure (<code>EnterpriseInsightsResponse</code>):</h4>
+  <ul>
+    <li><code>insights</code>: Enterprise cards with headline metric, percentage variance, evidence table, and recommendation.</li>
+    <li><code>anomalies</code>: Statistical outlier records (e.g. August 2026 Emergency Shipping Expense departing +381.4% from baseline).</li>
+  </ul>
+</div>
+
+<!-- ========================================================================= -->
+<!-- SECTION 6: ADMINISTRATION APIS                                            -->
+<!-- ========================================================================= -->
+<div class="page-break"></div>
+<h2>6. Administration APIs (User & Role Management)</h2>
+<p>Administrative endpoints require <code>MANAGE_USERS</code> or <code>MANAGE_ROLES</code> permission, granted exclusively to the <code>ADMIN</code> role.</p>
+
+<div class="endpoint-card">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span>/api/v1/admin/users</span>
+  </div>
+  <p><strong>Operation ID:</strong> <code>listAllApplicationUsers</code> | <strong>Permission:</strong> <code>MANAGE_USERS</code></p>
+  <p>Lists all application user accounts, assigned roles, permissions, employee linkages, and active status.</p>
+</div>
+
+<div class="endpoint-card">
+  <div class="endpoint-header">
+    <span class="badge badge-post">POST</span>
+    <span>/api/v1/admin/users</span>
+  </div>
+  <p><strong>Operation ID:</strong> <code>createApplicationUser</code> | <strong>Permission:</strong> <code>MANAGE_USERS</code></p>
+  <p>Provisions a new user account with bcrypt password hashing. Returns <code>201 Created</code>.</p>
+  <pre><code>{
+  "username": "anita.finance",
+  "email": "anita.f@freshmart.local",
+  "password": "SecurePass2026!",
+  "full_name": "Anita Sharma",
+  "role_id": 7,
+  "employee_id": "E010"
+}</code></pre>
+</div>
+
+<div class="endpoint-card">
+  <div class="endpoint-header">
+    <span class="badge badge-patch">PATCH</span>
+    <span>/api/v1/admin/users/{user_id}/status</span>
+  </div>
+  <p><strong>Operation ID:</strong> <code>updateUserAccountStatus</code> | <strong>Permission:</strong> <code>MANAGE_USERS</code></p>
+  <p>Enables or disables (deactivates) a user account. Deactivated accounts are immediately blocked.</p>
+  <pre><code>{ "is_active": false }</code></pre>
+</div>
+
+<div class="endpoint-card">
+  <div class="endpoint-header">
+    <span class="badge badge-patch">PATCH</span>
+    <span>/api/v1/admin/users/{user_id}/role</span>
+  </div>
+  <p><strong>Operation ID:</strong> <code>updateUserApplicationRole</code> | <strong>Permission:</strong> <code>MANAGE_ROLES</code></p>
+  <p>Reassigns a user's application role, updating their granted permissions dynamically.</p>
+  <pre><code>{ "role_id": 5 }</code></pre>
+</div>
+
+<div class="endpoint-card">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span>/api/v1/admin/roles</span>
+  </div>
+  <p><strong>Operation ID:</strong> <code>listApplicationRolesAndPermissions</code> | <strong>Permission:</strong> <code>MANAGE_ROLES</code></p>
+  <p>Returns all 7 application roles and their complete assigned permission codes.</p>
+</div>
+
+<!-- ========================================================================= -->
+<!-- SECTION 7: CHATBOT & HEALTH APIS                                          -->
+<!-- ========================================================================= -->
+<div class="page-break"></div>
+<h2>7. AI Chatbot & Health Diagnostic APIs</h2>
+
+<div class="endpoint-card">
+  <div class="endpoint-header">
+    <span class="badge badge-post">POST</span>
+    <span>/api/v1/chat/message</span>
+  </div>
+  <p><strong>Summary:</strong> Send Conversational Business Inquiry</p>
+  <p><strong>Operation ID:</strong> <code>sendChatMessage</code></p>
+  <p>Role-scoped conversational AI chat endpoint powered by Ollama Llama 3.1 8B. Injects authorized business domains into the system prompt.</p>
+  <pre><code>{
+  "message": "What business domains am I authorized to query?",
+  "conversation_id": "conv-001"
+}</code></pre>
+</div>
+
+<div class="endpoint-card">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span>/health</span>
+  </div>
+  <p><strong>Summary:</strong> API Health Check (Liveness Probe)</p>
+  <p><strong>Operation ID:</strong> <code>getLivenessHealthCheck</code></p>
+  <pre><code>{ "status": "ok" }</code></pre>
+</div>
+
+<div class="endpoint-card">
+  <div class="endpoint-header">
+    <span class="badge badge-get">GET</span>
+    <span>/api/v1/health</span>
+  </div>
+  <p><strong>Summary:</strong> Detailed System & Services Diagnostic Check</p>
+  <p><strong>Operation ID:</strong> <code>getDetailedSystemHealthCheck</code></p>
+  <p>Verifies operational status of FastAPI, Ollama LLM models, MySQL, and PostgreSQL.</p>
+  <pre><code>{
+  "status": "healthy",
+  "python_version": "3.13.15",
+  "services": {
+    "fastapi": { "status": "online" },
+    "ollama": {
+      "status": "online",
+      "available_models": ["llama3.1:8b", "qwen2.5-coder:7b"],
+      "required_sql_model": "qwen2.5-coder:7b",
+      "required_agent_model": "llama3.1:8b",
+      "sql_model_ready": true,
+      "agent_model_ready": true
+    },
+    "mysql": { "status": "online", "host": "localhost:3306", "version": "8.0.36" },
+    "postgresql": { "status": "online", "host": "localhost:5432", "version": "PostgreSQL 16.1" }
+  }
+}</code></pre>
+</div>
+
+<!-- ========================================================================= -->
+<!-- SECTION 8: ERROR HANDLING & INTEGRATION SAMPLES                           -->
+<!-- ========================================================================= -->
+<div class="page-break"></div>
+<h2>8. Error Handling & Integration Code Samples</h2>
+
+<h3>HTTP Status Code Reference</h3>
+<table>
+  <thead>
+    <tr><th>Status Code</th><th>Reason</th><th>Description</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>200 OK</code></td><td>Success</td><td>Request completed and response payload returned.</td></tr>
+    <tr><td><code>201 Created</code></td><td>Resource Created</td><td>User account successfully provisioned.</td></tr>
+    <tr><td><code>400 Bad Request</code></td><td>Client Error</td><td>Missing parameters, empty question, or duplicate username/email.</td></tr>
+    <tr><td><code>401 Unauthorized</code></td><td>Authentication Failure</td><td>Missing, invalid, or expired JWT bearer token.</td></tr>
+    <tr><td><code>403 Forbidden</code></td><td>Authorization Failure</td><td>User lacks the required RBAC domain permission.</td></tr>
+    <tr><td><code>404 Not Found</code></td><td>Resource Not Found</td><td>Target user or role ID does not exist in the database.</td></tr>
+    <tr><td><code>422 Unprocessable</code></td><td>Validation Error</td><td>Request payload failed Pydantic schema validation.</td></tr>
+    <tr><td><code>500 Internal Error</code></td><td>Server Error</td><td>Multi-agent execution failure or database error.</td></tr>
+    <tr><td><code>503 Unavailable</code></td><td>Service Offline</td><td>Ollama LLM or backend service unreachable.</td></tr>
+  </tbody>
+</table>
+
+<h3>Python Integration Example</h3>
+<pre><code>import requests
+
+BASE_URL = "http://localhost:8000/api/v1"
+
+# 1. Authenticate
+login_resp = requests.post(f"{BASE_URL}/auth/login", json={
+    "username": "ceo",
+    "password": "CeoPassword123!"
+})
+token = login_resp.json()["access_token"]
+headers = {"Authorization": f"Bearer {token}"}
+
+# 2. Run Natural-Language Analytics Query
+query_resp = requests.post(
+    f"{BASE_URL}/analytics/query",
+    headers=headers,
+    json={"question": "Why did profit decrease in August?"}
+)
+result = query_resp.json()
+
+print(f"Question: {result['question']}")
+print(f"Answer:   {result['answer']}")
+print(f"Factors:  {len(result.get('root_cause_analysis', {}).get('factors', []))} causal factors identified")
+</code></pre>
+
+<h3>cURL Command Example</h3>
+<pre><code>curl -X POST "http://localhost:8000/api/v1/analytics/query"      -H "Authorization: Bearer &lt;YOUR_JWT_TOKEN&gt;"      -H "Content-Type: application/json"      -d '{"question": "Show monthly sales trend for the last 12 months."}'
+</code></pre>
+
+<div class="callout" style="margin-top: 30px;">
+  <strong>FreshMart Agentic Analytics Platform</strong> &bull; Confidential & Enterprise Proprietary &bull; Powered by FastAPI, LangGraph, Ollama, & MCP.
+</div>
+
+</body>
+</html>
