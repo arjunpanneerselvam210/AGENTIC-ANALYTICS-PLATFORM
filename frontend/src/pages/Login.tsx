@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Server, Lock, User as UserIcon, ShieldCheck, ArrowRight, Info } from 'lucide-react';
+import { Server, Lock, User as UserIcon, ShieldCheck, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { useAuth, getRoleSlug } from '../context/AuthContext';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
@@ -11,6 +11,7 @@ export const Login: React.FC = () => {
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -29,7 +30,7 @@ export const Login: React.FC = () => {
       navigate(`/dashboard/${targetSlug}`, { replace: true });
     } catch (err: any) {
       setErrorMsg(
-        err.response?.data?.detail || 'Invalid username or password. Please verify your PostgreSQL credentials.'
+        err.response?.data?.detail || 'Invalid username or password. Please verify your credentials.'
       );
     } finally {
       setIsLoading(false);
@@ -76,7 +77,7 @@ export const Login: React.FC = () => {
                   onChange={(e) => setUsername(e.target.value)}
                   required
                   autoFocus
-                  placeholder="e.g. ceo, sales.manager, hr.manager, finance.manager"
+                  placeholder="Enter your enterprise username"
                   className="w-full bg-[#080C14] border border-slate-700/80 focus:border-emerald-500 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/40"
                 />
                 <UserIcon className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -87,14 +88,22 @@ export const Login: React.FC = () => {
               <label className="block text-xs font-medium text-slate-300 mb-1.5">Password</label>
               <div className="relative">
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   placeholder="••••••••••••"
-                  className="w-full bg-[#080C14] border border-slate-700/80 focus:border-emerald-500 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/40"
+                  className="w-full bg-[#080C14] border border-slate-700/80 focus:border-emerald-500 rounded-xl pl-9 pr-10 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/40"
                 />
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none"
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
@@ -109,17 +118,6 @@ export const Login: React.FC = () => {
               Sign In to Analytics
             </Button>
           </form>
-
-          {/* Secure Hackathon Evaluation Info (No auto-fill / No bypass) */}
-          <div className="pt-4 border-t border-slate-800/80">
-            <div className="flex items-start gap-2 p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-[11px] text-slate-400">
-              <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-semibold text-slate-300 block mb-0.5">Hackathon Demo Accounts</span>
-                <span>Usernames: <code className="text-emerald-300">ceo</code>, <code className="text-emerald-300">sales.manager</code>, <code className="text-emerald-300">hr.manager</code>, <code className="text-emerald-300">finance.manager</code>, <code className="text-emerald-300">inventory.manager</code>, <code className="text-emerald-300">erp.manager</code>. Standard format: <code className="text-slate-300">&lt;Role&gt;Password123!</code></span>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Security Footer Note */}

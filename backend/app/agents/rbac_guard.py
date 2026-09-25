@@ -24,6 +24,12 @@ TABLE_PERMISSION_MAP: Dict[str, List[str]] = {
     "purchase_order_items": ["VIEW_PURCHASES"],
     "expenses": ["VIEW_EXPENSES"],
     "company_financials": ["VIEW_FINANCE", "VIEW_PROFIT"],
+    # PostgreSQL company_auth tables
+    "users": ["MANAGE_USERS"],
+    "roles": ["MANAGE_USERS"],
+    "permissions": ["MANAGE_USERS"],
+    "role_permissions": ["MANAGE_USERS"],
+    "user_chat_sessions": ["VIEW_SALES", "VIEW_FINANCE", "VIEW_HR", "VIEW_INVENTORY", "VIEW_PURCHASES", "MANAGE_USERS"],
 }
 
 # Domain to required permissions mapping
@@ -36,6 +42,7 @@ DOMAIN_PERMISSION_MAP: Dict[str, List[str]] = {
     "PURCHASING": ["VIEW_PURCHASES"],
     "FINANCE": ["VIEW_FINANCE", "VIEW_PROFIT"],
     "EXPENSES": ["VIEW_EXPENSES"],
+    "AUTH_ADMIN": ["MANAGE_USERS"],
 }
 
 def evaluate_permissions(
@@ -52,6 +59,9 @@ def evaluate_permissions(
     Returns:
         (permission_granted: bool, missing_permissions: List[str], reason: str)
     """
+    # CEO and ADMIN possess unrestricted enterprise-wide authorization across all business and auth tables
+    if (user_role or "").upper() in ["CEO", "ADMIN"]:
+        return True, [], "Authorized"
     user_perms_set: Set[str] = set(user_permissions)
     missing: Set[str] = set()
 

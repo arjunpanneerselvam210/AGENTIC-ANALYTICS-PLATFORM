@@ -27,8 +27,10 @@ class OllamaClient:
             "model": chosen_model,
             "messages": messages,
             "stream": False,
+            "keep_alive": "1h",
             "options": {
-                "temperature": temperature
+                "temperature": temperature,
+                "num_predict": 256
             }
         }
         
@@ -62,11 +64,14 @@ class OllamaClient:
             "model": chosen_model,
             "messages": messages,
             "stream": False,
+            "keep_alive": "1h",
             "options": {
-                "temperature": temperature
+                "temperature": temperature,
+                "num_predict": 256
             }
         }
         with httpx.Client(timeout=timeout) as client:
+
             try:
                 response = client.post(f"{self.base_url}/api/chat", json=payload)
                 response.raise_for_status()

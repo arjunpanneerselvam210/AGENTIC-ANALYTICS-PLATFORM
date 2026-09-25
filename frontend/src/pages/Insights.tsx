@@ -1,19 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lightbulb, Filter, ArrowRight, TrendingUp, AlertTriangle, Info, CheckCircle2, Sparkles, Loader2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { Badge } from '../components/common/Badge';
 import { Card } from '../components/common/Card';
 import { MOCK_INSIGHTS } from '../data/mockData';
 import { getEnterpriseInsights } from '../services/analyticsApi';
 import type { KeyInsightItem } from '../types/dashboard';
 
+const ROLE_ALLOWED_INSIGHT_DOMAINS: Record<string, string[]> = {
+  CEO: ['All', 'Sales', 'Inventory', 'Finance', 'HR', 'CRM', 'Operations'],
+  ADMIN: ['All', 'Sales', 'Inventory', 'Finance', 'HR', 'CRM', 'Operations'],
+  SALES_MANAGER: ['All', 'Sales', 'CRM', 'Inventory'],
+  FINANCE_MANAGER: ['All', 'Finance', 'Sales', 'Operations'],
+  HR_MANAGER: ['All', 'HR'],
+  INVENTORY_MANAGER: ['All', 'Inventory', 'Operations'],
+  ERP_MANAGER: ['All', 'Operations', 'Inventory', 'Sales'],
+};
+
 export const Insights: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const userRole = user?.role || 'CEO';
+  const categories = ROLE_ALLOWED_INSIGHT_DOMAINS[userRole] || ['All', 'Sales'];
+
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [insightsList, setInsightsList] = useState<KeyInsightItem[]>(MOCK_INSIGHTS as KeyInsightItem[]);
   const [loading, setLoading] = useState<boolean>(true);
-  const categories = ['All', 'Sales', 'Inventory', 'Finance', 'HR', 'CRM', 'Operations'];
 
+  // If role changes or current selection is not permitted, fallback to 'All'
+  useEffect(() => {
+    if (!categories.includes(selectedCategory)) {
+      setSelectedCategory('All');
+    }
+  }, [categories, selectedCategory]);
 
   useEffect(() => {
     let isMounted = true;
@@ -46,9 +66,16 @@ export const Insights: React.FC = () => {
     };
   }, []);
 
-  const filteredInsights = insightsList.filter((ins: KeyInsightItem) =>
-    selectedCategory === 'All' || ins.category.toLowerCase().includes(selectedCategory.toLowerCase())
-  );
+  const filteredInsights = insightsList.filter((ins: KeyInsightItem) => {
+    // 1. RBAC check: Manager can only see insights matching their allowed domains
+    const isDomainAllowed = categories.some(
+      (cat) => cat !== 'All' && ins.category.toLowerCase().includes(cat.toLowerCase())
+    );
+    if (!isDomainAllowed) return false;
+
+    // 2. Active filter selection check
+    return selectedCategory === 'All' || ins.category.toLowerCase().includes(selectedCategory.toLowerCase());
+  });
 
 
   const getImpactBadge = (impact: string) => {

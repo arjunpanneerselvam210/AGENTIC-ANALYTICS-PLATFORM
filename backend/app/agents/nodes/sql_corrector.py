@@ -23,16 +23,19 @@ def correct_sql_node(state: AnalyticsState) -> AnalyticsState:
     last_error = state.get("sql_error") or state.get("last_error") or "Unknown SQL error"
     failed_sql = state.get("generated_sql", "")
     question = state.get("original_question", "")
+    target_db = state.get("target_database", "company_analytics")
+    dialect = "PostgreSQL 16" if "auth" in target_db else "MySQL 8.0"
     schema_text = state.get("schema_context", {}).get("formatted_text", "")
 
-    logger.info(f"Self-correcting SQL (Attempt {retry_count}/{max_retries}) | Error: {last_error}")
+    logger.info(f"Self-correcting SQL for {target_db} ({dialect}) (Attempt {retry_count}/{max_retries}) | Error: {last_error}")
 
     prompt = (
         f"Original User Question: {question}\n\n"
+        f"Target Database: {target_db} ({dialect})\n"
         f"Failed SQL Query:\n{failed_sql}\n\n"
         f"Error Encountered:\n{last_error}\n\n"
-        f"FreshMart Schema Context:\n{schema_text}\n\n"
-        f"Generate the corrected, single read-only MySQL 8.0 SELECT statement. Output only raw SQL:"
+        f"Discovered Schema Context:\n{schema_text}\n\n"
+        f"Generate the corrected, single read-only {dialect} SELECT statement strictly using discovered schema. Output only raw SQL:"
     )
 
     messages = [

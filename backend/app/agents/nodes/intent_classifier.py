@@ -18,12 +18,30 @@ logger = logging.getLogger("agents.intent_classifier")
 def rule_based_intent_fallback(question: str) -> Dict[str, Any]:
     """
     High-accuracy heuristic fallback when LLM output is malformed or offline.
+    Correctly identifies database (company_analytics vs company_auth) and schema.
     """
     q = question.lower()
+
+    # 0. Application Security, User Accounts & Roles (PostgreSQL company_auth)
+    if any(k in q for k in ["user", "users", "role", "roles", "permission", "permissions", "login", "application account", "application login", "provisioned", "rbac", "privilege", "who has access", "chat session"]):
+        return {
+            "target_database": "company_auth",
+            "target_schema": "company_auth",
+            "domain": "AUTH_ADMIN",
+            "operation": "lookup",
+            "metric": "users_and_roles",
+            "dimension": "role",
+            "time_range": "current",
+            "required_domains": ["AUTH_ADMIN"],
+            "candidate_tables": ["users", "roles", "permissions", "role_permissions"],
+            "visualization_hint": "table"
+        }
     
-    # 1. Root Cause Analysis
+    # 1. Root Cause Analysis (company_analytics)
     if any(k in q for k in ["why did profit", "decrease in august", "drop in august", "profit drop", "root cause", "profit decrease"]):
         return {
+            "target_database": "company_analytics",
+            "target_schema": "company_analytics",
             "domain": "ROOT_CAUSE",
             "operation": "root_cause_analysis",
             "metric": "net_profit_and_expenses",
@@ -37,6 +55,8 @@ def rule_based_intent_fallback(question: str) -> Dict[str, Any]:
     # 2. Cross Domain (Sales + Inventory)
     if ("sales" in q or "sold" in q or "revenue" in q) and ("inventory" in q or "stock" in q):
         return {
+            "target_database": "company_analytics",
+            "target_schema": "company_analytics",
             "domain": "CROSS_DOMAIN",
             "operation": "correlation_and_ranking",
             "metric": "units_sold_and_stock",
@@ -50,6 +70,8 @@ def rule_based_intent_fallback(question: str) -> Dict[str, Any]:
     # 3. Top Products by Revenue
     if "highest revenue" in q or "top products" in q or "top revenue" in q:
         return {
+            "target_database": "company_analytics",
+            "target_schema": "company_analytics",
             "domain": "SALES",
             "operation": "ranking",
             "metric": "revenue",
@@ -60,9 +82,11 @@ def rule_based_intent_fallback(question: str) -> Dict[str, Any]:
             "visualization_hint": "bar_chart"
         }
 
-    # 3. HR / Salaries
+    # 4. HR / Salaries
     if any(k in q for k in ["salary", "salaries", "compensation", "bonus", "payroll", "paid", "wage"]):
         return {
+            "target_database": "company_analytics",
+            "target_schema": "company_analytics",
             "domain": "HR",
             "operation": "aggregation",
             "metric": "salary",
@@ -74,6 +98,8 @@ def rule_based_intent_fallback(question: str) -> Dict[str, Any]:
         }
     if any(k in q for k in ["employee", "employees", "department", "departments", "headcount", "staff", "manager"]):
         return {
+            "target_database": "company_analytics",
+            "target_schema": "company_analytics",
             "domain": "HR",
             "operation": "count_and_aggregation",
             "metric": "employee_count",
@@ -84,9 +110,11 @@ def rule_based_intent_fallback(question: str) -> Dict[str, Any]:
             "visualization_hint": "bar_chart"
         }
 
-    # 4. CRM
+    # 5. CRM
     if any(k in q for k in ["lead", "leads", "customer", "customers", "interaction", "pipeline"]):
         return {
+            "target_database": "company_analytics",
+            "target_schema": "company_analytics",
             "domain": "CRM",
             "operation": "distribution",
             "metric": "lead_count_or_value",
@@ -97,9 +125,11 @@ def rule_based_intent_fallback(question: str) -> Dict[str, Any]:
             "visualization_hint": "pie_chart"
         }
 
-    # 5. Inventory
+    # 6. Inventory
     if any(k in q for k in ["inventory", "stock", "reorder", "quantity on hand", "deficit"]):
         return {
+            "target_database": "company_analytics",
+            "target_schema": "company_analytics",
             "domain": "INVENTORY",
             "operation": "threshold_filtering",
             "metric": "quantity_on_hand",
@@ -110,9 +140,11 @@ def rule_based_intent_fallback(question: str) -> Dict[str, Any]:
             "visualization_hint": "bar_chart"
         }
 
-    # 6. Purchasing
+    # 7. Purchasing
     if any(k in q for k in ["supplier", "suppliers", "purchase order", "procurement", "po", "vendor"]):
         return {
+            "target_database": "company_analytics",
+            "target_schema": "company_analytics",
             "domain": "PURCHASING",
             "operation": "ranking",
             "metric": "purchase_value",
@@ -123,9 +155,11 @@ def rule_based_intent_fallback(question: str) -> Dict[str, Any]:
             "visualization_hint": "bar_chart"
         }
 
-    # 7. Finance
+    # 8. Finance
     if any(k in q for k in ["p&l", "profit", "revenue, expenses", "expense", "expenses", "financials", "operating expense"]):
         return {
+            "target_database": "company_analytics",
+            "target_schema": "company_analytics",
             "domain": "FINANCE",
             "operation": "financial_summary",
             "metric": "revenue_expenses_profit",
@@ -136,9 +170,11 @@ def rule_based_intent_fallback(question: str) -> Dict[str, Any]:
             "visualization_hint": "line_chart"
         }
 
-    # 8. Sales
+    # 9. Sales
     if any(k in q for k in ["sales", "revenue", "order", "orders", "monthly sales", "top products"]):
         return {
+            "target_database": "company_analytics",
+            "target_schema": "company_analytics",
             "domain": "SALES",
             "operation": "trend",
             "metric": "total_sales",
@@ -151,6 +187,8 @@ def rule_based_intent_fallback(question: str) -> Dict[str, Any]:
 
     # Default: General Analytics
     return {
+        "target_database": "company_analytics",
+        "target_schema": "company_analytics",
         "domain": "GENERAL_ANALYTICS",
         "operation": "general_query",
         "metric": "general",
@@ -163,12 +201,12 @@ def rule_based_intent_fallback(question: str) -> Dict[str, Any]:
 
 def classify_intent_node(state: AnalyticsState) -> AnalyticsState:
     """
-    Extracts structured intent, required business domains, candidate tables,
+    Extracts structured intent, target database, schema, required business domains, candidate tables,
     and visualization hints from the question.
     """
     question = state["original_question"]
     history = state.get("conversation_history", [])
-    logger.info(f"Classifying intent for question: '{question}'")
+    logger.info(f"Classifying intent and database routing for question: '{question}'")
 
     messages = [
         {"role": "system", "content": INTENT_SYSTEM_PROMPT},
@@ -179,37 +217,53 @@ def classify_intent_node(state: AnalyticsState) -> AnalyticsState:
     messages.append({"role": "user", "content": f"Classify this analytics question: {question}"})
 
     intent_data: Dict[str, Any] = {}
-    try:
-        reply = ollama_client.generate_chat_sync(
-            messages=messages,
-            model=settings.OLLAMA_AGENT_MODEL,
-            temperature=0.0,
-            timeout=15.0
-        )
-        # Extract JSON from reply
-        match = re.search(r"\{.*\}", reply, re.DOTALL)
-        if match:
-            intent_data = json.loads(match.group(0))
-    except Exception as e:
-        logger.warning(f"Ollama intent classification failed ({e}), using heuristic planner.")
+    heuristic = rule_based_intent_fallback(question)
+    if heuristic.get("domain") != "GENERAL_ANALYTICS":
+        intent_data = heuristic
+        logger.info(f"Fast-path intent matched in <1ms: Domain={intent_data.get('domain')} on {intent_data.get('target_database')}")
+    else:
+        try:
+            reply = ollama_client.generate_chat_sync(
+                messages=messages,
+                model=settings.OLLAMA_AGENT_MODEL,
+                temperature=0.0,
+                timeout=5.0
+            )
+            # Extract JSON from reply
+            match = re.search(r"\{.*\}", reply, re.DOTALL)
+            if match:
+                intent_data = json.loads(match.group(0))
+        except Exception as e:
+            logger.warning(f"Ollama intent classification failed ({e}), using heuristic planner.")
 
     if not intent_data or "domain" not in intent_data:
-        intent_data = rule_based_intent_fallback(question)
+        intent_data = heuristic
 
     # Ensure required_domains and candidate_tables are populated
     required_domains = intent_data.get("required_domains", [intent_data.get("domain", "GENERAL_ANALYTICS")])
     candidate_tables = intent_data.get("candidate_tables", [])
     if not candidate_tables:
-        fallback = rule_based_intent_fallback(question)
-        candidate_tables = fallback.get("candidate_tables", ["sales_orders"])
-        required_domains = fallback.get("required_domains", required_domains)
+        candidate_tables = heuristic.get("candidate_tables", ["sales_orders"])
+        required_domains = heuristic.get("required_domains", required_domains)
 
+    # Resolve target database & schema dynamically
+    target_db = intent_data.get("target_database")
+    if not target_db:
+        if intent_data.get("domain") == "AUTH_ADMIN" or any(t in ["users", "roles", "permissions", "role_permissions", "user_chat_sessions"] for t in candidate_tables):
+            target_db = settings.POSTGRES_DB
+        else:
+            target_db = settings.MYSQL_DB
+
+    target_schema = intent_data.get("target_schema", target_db)
     viz_hint = intent_data.get("visualization_hint", "table")
 
-    logger.info(f"Classified domain: {intent_data.get('domain')} | Domains: {required_domains} | Tables: {candidate_tables}")
+
+    logger.info(f"Routed target DB: {target_db} ({target_schema}) | Domain: {intent_data.get('domain')} | Tables: {candidate_tables}")
 
     return {
         "intent": intent_data,
+        "target_database": target_db,
+        "target_schema": target_schema,
         "required_domains": required_domains,
         "required_tables": candidate_tables,
         "visualization_hint": viz_hint

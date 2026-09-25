@@ -5,12 +5,13 @@ import {
   MessageSquare,
   Database,
   FileBarChart,
-  PanelsTopLeft,
   Lightbulb,
   Settings,
   Plus,
-  Server
+  Server,
+  Users
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { Button } from '../common/Button';
 
 interface SidebarProps {
@@ -21,12 +22,31 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ onAddDataSource }) => {
   const location = useLocation();
+  const { user } = useAuth();
+  const isCeoOrAdmin = user?.role === 'CEO' || user?.role === 'ADMIN';
+
+  const roleDashboardLabels: Record<string, string> = {
+    CEO: 'CEO Executive Dashboard',
+    SALES_MANAGER: 'Sales Dashboard',
+    HR_MANAGER: 'HR Dashboard',
+    FINANCE_MANAGER: 'Finance Dashboard',
+    INVENTORY_MANAGER: 'Inventory Dashboard',
+    ERP_MANAGER: 'ERP Operations Dashboard',
+    ADMIN: 'System Admin Dashboard',
+  };
+
+  const dashboardLabel = user?.role ? (roleDashboardLabels[user.role] || 'Dashboard') : 'Dashboard';
+
   const navItems = [
-    { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { label: dashboardLabel, path: '/dashboard', icon: LayoutDashboard },
     { label: 'Analytics Assistant', path: '/analytics', icon: MessageSquare, badge: 'AI' },
-    { label: 'Data Sources', path: '/data-sources', icon: Database },
+    ...(isCeoOrAdmin
+      ? [
+          { label: 'User & Role Admin', path: '/admin/users', icon: Users, badge: 'CEO' },
+          { label: 'Data Sources', path: '/data-sources', icon: Database },
+        ]
+      : []),
     { label: 'Reports', path: '/reports', icon: FileBarChart },
-    { label: 'Dashboards', path: '/dashboards', icon: PanelsTopLeft },
     { label: 'Insights', path: '/insights', icon: Lightbulb },
     { label: 'Settings', path: '/settings', icon: Settings },
   ];
@@ -85,34 +105,54 @@ export const Sidebar: React.FC<SidebarProps> = ({ onAddDataSource }) => {
         })}
       </nav>
 
-      {/* Connected Systems & Data Sources Box */}
+      {/* Bottom Panel: Connected Systems for CEO/Admin, or Active Domain Scope for Managers */}
       <div className="p-4 border-t border-slate-800/80 bg-[#080C14]">
-        <div className="flex items-center justify-between mb-2.5">
-          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Connected Systems</span>
-          <span className="text-[10px] text-emerald-400 font-mono">4/4 Unified</span>
-        </div>
-
-        <div className="space-y-1.5 mb-3">
-          {connectedSystems.map((sys) => (
-            <div key={sys.name} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-slate-900/60 border border-slate-800/40">
-              <span className="text-slate-300 font-medium">{sys.name}</span>
-              <div className="flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${sys.color} animate-pulse`}></span>
-                <span className="text-[11px] text-slate-400">Connected</span>
-              </div>
+        {isCeoOrAdmin ? (
+          <>
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Connected Systems</span>
+              <span className="text-[10px] text-emerald-400 font-mono">4/4 Unified</span>
             </div>
-          ))}
-        </div>
 
-        <Button
-          onClick={onAddDataSource}
-          variant="outline"
-          size="sm"
-          className="w-full text-xs border-dashed border-slate-700 hover:border-emerald-500/50 text-slate-300 hover:text-emerald-400"
-          icon={<Plus className="w-3.5 h-3.5" />}
-        >
-          Add Data Source
-        </Button>
+            <div className="space-y-1.5 mb-3">
+              {connectedSystems.map((sys) => (
+                <div key={sys.name} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-slate-900/60 border border-slate-800/40">
+                  <span className="text-slate-300 font-medium">{sys.name}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full ${sys.color} animate-pulse`}></span>
+                    <span className="text-[11px] text-slate-400">Connected</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <Button
+              onClick={onAddDataSource}
+              variant="outline"
+              size="sm"
+              className="w-full text-xs border-dashed border-slate-700 hover:border-emerald-500/50 text-slate-300 hover:text-emerald-400"
+              icon={<Plus className="w-3.5 h-3.5" />}
+            >
+              Add Data Source
+            </Button>
+          </>
+        ) : (
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Active Domain Scope</span>
+              <span className="text-[10px] text-emerald-400 font-mono">RBAC Guarded</span>
+            </div>
+            <div className="py-2.5 px-3 rounded-xl bg-slate-900/60 border border-slate-800/60 text-xs">
+              <div className="flex items-center gap-2 text-slate-200 font-semibold">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>{user?.role?.replace('_', ' ')}</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+                Authorized for operational telemetry in FreshMart production MySQL.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </aside>
   );

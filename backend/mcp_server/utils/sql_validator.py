@@ -53,8 +53,16 @@ class SQLValidator:
         (re.compile(r"\bFOR\s+SHARE\b", re.IGNORECASE), "Locking clause FOR SHARE is forbidden"),
     ]
 
+    try:
+        from app.core.config import settings
+        _POSTGRES_DB_NAME = settings.POSTGRES_DB
+        _MYSQL_DB_NAME = settings.MYSQL_DB
+    except Exception:
+        _POSTGRES_DB_NAME = "company_auth"
+        _MYSQL_DB_NAME = "company_analytics"
+
     DISALLOWED_SCHEMAS = [
-        "company_auth",
+        _POSTGRES_DB_NAME,
         "mysql",
         "performance_schema",
         "information_schema.user_privileges",
@@ -62,12 +70,13 @@ class SQLValidator:
         "pg_catalog"
     ]
 
+
     def __init__(self, max_sql_length: int = 10000):
         self.max_sql_length = max_sql_length
 
-    def validate_sql(self, sql: str) -> SQLValidationResult:
+    def validate_sql(self, sql: str, target_database: str = "company_analytics") -> SQLValidationResult:
         """
-        Validates the incoming SQL string according to security rules.
+        Validates the incoming SQL string according to security rules and target database context.
         Returns SQLValidationResult indicating validity, error details, and cleaned SQL.
         """
         if not sql or not isinstance(sql, str):
@@ -100,7 +109,17 @@ class SQLValidator:
 
         # 3. Check for references to unauthorized or external databases
         sql_lower = sql_stripped.lower()
-        for schema in self.DISALLOWED_SCHEMAS:
+        is_auth_db = "auth" in (target_database or "").lower() or (target_database == self._POSTGRES_DB_NAME)
+
+        disallowed = [
+            s for s in self.DISALLOWED_SCHEMAS
+            if not (is_auth_db and s.lower() == self._POSTGRES_DB_NAME.lower())
+        ]
+        if is_auth_db:
+            disallowed.append(self._MYSQL_DB_NAME)
+
+
+        for schema in disallowed:
             if f"{schema}." in sql_lower or f"`{schema}`." in sql_lower:
                 return SQLValidationResult(
                     is_valid=False,
@@ -202,10 +221,10 @@ class SQLValidator:
 # Singleton validator instance
 default_validator = SQLValidator()
 
-def validate_sql_security(sql: str) -> tuple[bool, Optional[str]]:
+def validate_sql_security(sql: str, target_database: str = "company_analytics") -> tuple[bool, Optional[str]]:
     """
     Convenience function returning (is_valid, error_message).
     """
-    res = default_validator.validate_sql(sql)
+    res = default_validator.validate_sql(sql, target_database=target_database)
     return res.is_valid, res.error
 

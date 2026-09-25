@@ -12,13 +12,14 @@ logger = logging.getLogger("agents.sql_executor")
 
 def execute_sql_node(state: AnalyticsState) -> AnalyticsState:
     """
-    Calls MCP tool `execute_read_only_sql` with validated SQL.
+    Calls MCP tool `execute_read_only_sql` with validated SQL and target database context.
     Records structured query results or execution error.
     """
     sql = state.get("validated_sql", "")
-    logger.info(f"Executing SQL via MCP: {sql[:100]}...")
+    target_db = state.get("target_database", "company_analytics")
+    logger.info(f"Executing SQL via MCP on target DB '{target_db}': {sql[:100]}...")
 
-    res = mcp_client.execute_read_only_sql(sql)
+    res = mcp_client.execute_read_only_sql(sql, target_database=target_db)
     if not res.get("success"):
         err_msg = res.get("error", "MCP query execution failed.")
         logger.warning(f"MCP execution returned error: {err_msg}")

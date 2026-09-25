@@ -5,16 +5,29 @@ Exposes role-scoped conversational guidance powered by Ollama (Llama 3.1 8B).
 
 from datetime import datetime
 from typing import List
+import json
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.core.time_utils import get_current_ist
+
 
 from app.core.security import get_current_user
-from app.models.auth_models import User
-from app.schemas.chat_schemas import ChatMessageRequest, ChatMessageResponse
+from app.db.postgres_session import get_postgres_db
+from app.models.auth_models import User, UserChatSession
+from app.schemas.chat_schemas import (
+    ChatMessageRequest,
+    ChatMessageResponse,
+    ChatSessionItem,
+    ChatSessionSaveRequest,
+    ChatSessionListResponse
+)
 from app.schemas.common_schemas import HTTPError
 from app.core.llm import ollama_client
 from app.core.config import settings
 
 router = APIRouter(prefix="/chat", tags=["AI Chatbot"])
+
 
 def get_allowed_domains_for_user(user: User) -> List[str]:
     """
@@ -126,5 +139,130 @@ async def send_chat_message(
         user_name=current_user.full_name,
         allowed_domains=allowed_domains,
         model_used=settings.OLLAMA_AGENT_MODEL,
-        timestamp=datetime.utcnow()
+        timestamp=get_current_ist()
     )
+
+
+
+@router.get(
+    "/sessions",
+    response_model=ChatSessionListResponse,
+    summary="Get User Chat & Analytics Sessions History",
+    description="Returns all previously archived conversation sessions for the authenticated user, ordered by most recent first."
+)
+def get_user_chat_sessions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_postgres_db)
+):
+    """Retrieves all persisted previous sessions for the logged-in user."""
+    sessions = (
+        db.query(UserChatSession)
+        .filter(UserChatSession.user_id == current_user.user_id)
+        .order_by(UserChatSession.updated_at.desc())
+        .limit(50)
+        .all()
+    )
+
+    items = []
+    for s in sessions:
+        try:
+            parsed_items = json.loads(s.session_data) if s.session_data else []
+        except Exception:
+            parsed_items = []
+        items.append(
+            ChatSessionItem(
+                id=s.id,
+                title=s.title,
+                started_at=s.started_at,
+                queries_count=s.queries_count,
+                items=parsed_items,
+                created_at=s.created_at,
+                updated_at=s.updated_at
+            )
+        )
+
+    return ChatSessionListResponse(sessions=items, total=len(items))
+
+
+@router.post(
+    "/sessions",
+    response_model=ChatSessionItem,
+    summary="Save or Archive Chat & Analytics Session",
+    description="Saves or updates a conversation session in the server database for persistent history."
+)
+def save_user_chat_session(
+    req: ChatSessionSaveRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_postgres_db)
+):
+    """Archives or updates an analytics conversation session for the authenticated user."""
+    session_record = (
+        db.query(UserChatSession)
+        .filter(UserChatSession.id == req.id, UserChatSession.user_id == current_user.user_id)
+        .first()
+    )
+
+    serialized_data = json.dumps(req.items, default=str)
+
+    if session_record:
+        session_record.title = req.title
+        session_record.queries_count = req.queries_count
+        session_record.started_at = req.started_at
+        session_record.session_data = serialized_data
+        session_record.updated_at = get_current_ist()
+    else:
+        session_record = UserChatSession(
+            id=req.id,
+            user_id=current_user.user_id,
+            title=req.title,
+            queries_count=req.queries_count,
+            started_at=req.started_at,
+            session_data=serialized_data,
+            created_at=get_current_ist(),
+            updated_at=get_current_ist()
+        )
+
+        db.add(session_record)
+
+    db.commit()
+    db.refresh(session_record)
+
+    try:
+        parsed_items = json.loads(session_record.session_data) if session_record.session_data else []
+    except Exception:
+        parsed_items = []
+
+    return ChatSessionItem(
+        id=session_record.id,
+        title=session_record.title,
+        started_at=session_record.started_at,
+        queries_count=session_record.queries_count,
+        items=parsed_items,
+        created_at=session_record.created_at,
+        updated_at=session_record.updated_at
+    )
+
+
+@router.delete(
+    "/sessions/{session_id}",
+    summary="Delete Archived Chat Session",
+    description="Deletes a specific archived session belonging to the authenticated user."
+)
+def delete_user_chat_session(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_postgres_db)
+):
+    """Deletes an archived chat session."""
+    session_record = (
+        db.query(UserChatSession)
+        .filter(UserChatSession.id == session_id, UserChatSession.user_id == current_user.user_id)
+        .first()
+    )
+    if not session_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found.")
+
+    db.delete(session_record)
+    db.commit()
+    return {"success": True, "deleted_id": session_id}
+

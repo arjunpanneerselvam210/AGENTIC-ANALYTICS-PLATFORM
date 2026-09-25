@@ -52,6 +52,7 @@ class User(Base):
 
     # Relationships
     role = relationship("Role", back_populates="users")
+    chat_sessions = relationship("UserChatSession", back_populates="user", cascade="all, delete-orphan")
 
     @property
     def permission_codes(self) -> List[str]:
@@ -59,3 +60,20 @@ class User(Base):
         if not self.role:
             return []
         return [p.permission_code for p in self.role.permissions]
+
+
+class UserChatSession(Base):
+    __tablename__ = "user_chat_sessions"
+
+    id = Column(String(100), primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    queries_count = Column(Integer, default=0, nullable=False)
+    started_at = Column(String(60), nullable=False)
+    session_data = Column(Text, nullable=False)  # JSON-encoded array of queries & responses
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", back_populates="chat_sessions")
+

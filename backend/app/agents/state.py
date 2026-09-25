@@ -22,6 +22,8 @@ class AnalyticsState(TypedDict, total=False):
     intent: Dict[str, Any]  # domain, metric, dimension, time_range, operation, filters
     required_domains: List[str]
     required_tables: List[str]
+    target_database: str  # "company_analytics" (MySQL) or "company_auth" (PostgreSQL)
+    target_schema: str    # "company_analytics" (MySQL) or "public" (PostgreSQL)
     
     # 4. RBAC Permission Decision
     permission_granted: bool

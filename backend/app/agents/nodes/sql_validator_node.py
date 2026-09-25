@@ -12,14 +12,15 @@ logger = logging.getLogger("agents.sql_validator")
 
 def validate_sql_node(state: AnalyticsState) -> AnalyticsState:
     """
-    Validates generated SQL against security rules.
+    Validates generated SQL against security rules for the target database.
     If valid, sets is_sql_valid = True and validated_sql = generated_sql.
     Otherwise sets is_sql_valid = False and records sql_error.
     """
     sql = (state.get("generated_sql") or "").strip()
-    logger.info(f"Validating SQL: {sql[:100]}...")
+    target_db = state.get("target_database", "company_analytics")
+    logger.info(f"Validating SQL for target DB '{target_db}': {sql[:100]}...")
 
-    is_valid, error_msg = validate_sql_security(sql)
+    is_valid, error_msg = validate_sql_security(sql, target_database=target_db)
     if not is_valid:
         logger.warning(f"SQL security validation failed: {error_msg}")
         return {

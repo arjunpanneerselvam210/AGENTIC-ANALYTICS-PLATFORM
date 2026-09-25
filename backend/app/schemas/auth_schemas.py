@@ -113,4 +113,30 @@ class UserStatusUpdate(BaseModel):
 
 class UserRoleUpdate(BaseModel):
     """Payload to reassign a user's application role."""
-    role_id: int = Field(..., description="ID of the new role to assign", example=5)
+    role_id: Optional[int] = Field(None, description="ID of the new role to assign", example=5)
+    role_name: Optional[str] = Field(None, description="Name of the new role to assign", example="ERP_MANAGER")
+
+class EmployeeDirectoryItem(BaseModel):
+    """Correlated record representing a MySQL workforce employee and their PostgreSQL application account status."""
+    employee_id: str = Field(..., description="MySQL employee ID", example="E008")
+    first_name: str = Field(..., description="First name", example="Rohan")
+    last_name: str = Field(..., description="Last name", example="Mehta")
+    full_name: str = Field(..., description="Full employee name", example="Rohan Mehta")
+    email: str = Field(..., description="Corporate email address", example="rohan.mehta@freshmart.local")
+    department: str = Field(..., description="Department name", example="Sales")
+    job_title: str = Field(..., description="Corporate job title", example="Regional Sales Executive")
+    employee_status: str = Field(..., description="MySQL employee status (Active, On Leave, Terminated)", example="Active")
+    has_account: bool = Field(..., description="Whether this employee has an application login account in PostgreSQL", example=False)
+    user_id: Optional[int] = Field(None, description="PostgreSQL user ID if provisioned", example=8)
+    username: Optional[str] = Field(None, description="Application login username if provisioned", example="rohan.mehta")
+    role_id: Optional[int] = Field(None, description="Assigned role ID", example=5)
+    role_name: Optional[str] = Field(None, description="Assigned application role name", example="SALES_MANAGER")
+    is_active: Optional[bool] = Field(None, description="Whether application account is active/enabled", example=True)
+
+class ProvisionAccountRequest(BaseModel):
+    """Payload submitted by CEO to provision an application login for an existing MySQL employee."""
+    employee_id: str = Field(..., description="Existing MySQL employee ID", example="E008")
+    username: str = Field(..., min_length=3, max_length=60, description="Unique application login username", example="rohan.mehta")
+    password: str = Field(..., min_length=6, description="Temporary initial password (hashed with bcrypt)", example="RohanPass123!")
+    role_name: str = Field(..., description="Application role to assign", example="SALES_MANAGER")
+

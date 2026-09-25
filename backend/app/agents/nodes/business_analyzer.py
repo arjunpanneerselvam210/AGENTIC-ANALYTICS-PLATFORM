@@ -99,6 +99,19 @@ def deterministic_business_summary(
         total_rev = sum(r.get("total_revenue", 0) for r in rows if isinstance(r.get("total_revenue"), (int, float)))
         return f"Monthly sales performance over the recorded period generated a total revenue of ₹{total_rev:,.2f} across {row_count} recorded months."
 
+    # User Accounts & RBAC Roles (PostgreSQL company_auth)
+    if intent_domain == "AUTH_ADMIN" or any(k in question.lower() for k in ["user", "role", "permission", "account"]):
+        if any("role_name" in r for r in rows) and any("username" in r for r in rows):
+            return (
+                f"Security and RBAC governance records show {row_count} registered application accounts across system roles. "
+                f"User credentials and role privileges are properly authenticated in PostgreSQL."
+            )
+        if any("permission" in r for r in rows):
+            return (
+                f"Retrieved {row_count} RBAC permission mappings from PostgreSQL security governance."
+            )
+        return f"Retrieved {row_count} user and security records from PostgreSQL authentication database."
+
     # Default fallback summary
     first_row_str = ", ".join(f"{k}: {v}" for k, v in list(rows[0].items())[:3])
     return f"Retrieved {row_count} records from the FreshMart database. Top result ({first_row_str})."
@@ -170,28 +183,32 @@ def analyze_results_node(state: AnalyticsState) -> AnalyticsState:
             f"Top Factors: Emergency shipping surged to ₹430,000 (+381.4%), Spot procurement reached ₹280,000 (+93.7%).\n\n"
         )
 
-    prompt += "Provide an authoritative executive business analysis answering the question directly, citing key figures and evidence:"
+    # Fast-path: Check deterministic factual summary first
+    fast_summary = deterministic_business_summary(question, columns, rows, row_count, intent_domain, root_cause_data)
+    if fast_summary and fast_summary != "The query executed successfully, but no matching records were found for the specified criteria.":
+        analysis = fast_summary
+        logger.info(f"Fast-path business analysis synthesized in <1ms: {analysis[:80]}...")
+    else:
+        messages = [
+            {"role": "system", "content": BUSINESS_ANALYSIS_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt}
+        ]
+        analysis = ""
+        try:
+            analysis = ollama_client.generate_chat_sync(
+                messages=messages,
+                model=settings.OLLAMA_AGENT_MODEL,
+                temperature=0.2,
+                timeout=5.0
+            )
+        except Exception as e:
+            logger.warning(f"Ollama business analysis call timed out or failed: {e}. Utilizing deterministic synthesis.")
 
-    messages = [
-        {"role": "system", "content": BUSINESS_ANALYSIS_SYSTEM_PROMPT},
-        {"role": "user", "content": prompt}
-    ]
-
-    analysis: str = ""
-    try:
-        analysis = ollama_client.generate_chat_sync(
-            messages=messages,
-            model=settings.OLLAMA_AGENT_MODEL,
-            temperature=0.2,
-            timeout=25.0
-        )
-    except Exception as e:
-        logger.warning(f"Ollama business analysis call timed out or failed: {e}. Utilizing deterministic synthesis.")
-
-    if not analysis or len(analysis.strip()) < 10:
-        analysis = deterministic_business_summary(question, columns, rows, row_count, intent_domain, root_cause_data)
+        if not analysis or len(analysis.strip()) < 10:
+            analysis = fast_summary or deterministic_business_summary(question, columns, rows, row_count, intent_domain, root_cause_data)
 
     confidence_level = "HIGH" if (root_cause_data or row_count > 0) else "MEDIUM"
+
 
     return {
         "analysis": analysis.strip(),

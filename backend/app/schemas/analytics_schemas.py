@@ -7,6 +7,7 @@ enterprise insights, root-cause decomposition, and data provenance.
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Union
 from pydantic import BaseModel, ConfigDict, Field
+from app.core.time_utils import get_current_ist
 
 class AnalyticsQueryRequest(BaseModel):
     """Natural-language business question submitted to the multi-agent analytics pipeline."""
@@ -152,7 +153,7 @@ class AnalyticsQueryResponse(BaseModel):
     error: Optional[str] = Field(None, description="Error explanation if execution failed or access was denied", example=None)
     user_role: str = Field(..., description="Role of the authenticated requesting user", example="CEO")
     user_name: str = Field(..., description="Full display name of the requesting user", example="Vikram Malhotra")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="UTC timestamp of response generation")
+    timestamp: datetime = Field(default_factory=get_current_ist, description="IST timestamp of response generation")
     # Advanced Agentic Intelligence
     investigation_plan: Optional[InvestigationPlan] = Field(None, description="Investigation plan formulated by multi-agent planner")
     root_cause_analysis: Optional[RootCauseAnalysis] = Field(None, description="Detailed causal decomposition for profit, margin, or cost variance inquiries")
@@ -260,4 +261,4 @@ class EnterpriseInsightsResponse(BaseModel):
     success: bool = Field(True, description="Query execution status", example=True)
     insights: List[EnterpriseInsightCard] = Field(..., description="List of synthesized enterprise insights")
     anomalies: List[EnterpriseAnomalyCard] = Field(default_factory=list, description="List of detected business anomalies")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="UTC timestamp of telemetry calculation")
+    timestamp: datetime = Field(default_factory=get_current_ist, description="IST timestamp of telemetry calculation")

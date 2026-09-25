@@ -10,6 +10,8 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Path, status
 from app.core.security import get_current_user
+from app.core.time_utils import get_current_ist
+
 from app.models.auth_models import User
 from app.schemas.analytics_schemas import (
     AnalyticsQueryRequest,
@@ -176,8 +178,9 @@ def execute_analytics_query(
         error=res.get("error"),
         user_role=user_role,
         user_name=current_user.full_name,
-        timestamp=datetime.utcnow(),
+        timestamp=get_current_ist(),
         investigation_plan=res.get("investigation_plan"),
+
         root_cause_analysis=res.get("root_cause_analysis"),
         comparisons=res.get("comparisons"),
         trends=res.get("trends"),
@@ -186,6 +189,71 @@ def execute_analytics_query(
         recommendations=res.get("recommendations", []),
         confidence=res.get("confidence", "HIGH")
     )
+
+
+def compute_sales_delta(mgr: MCPDatabaseManager, range_opt: str) -> Dict[str, Any]:
+    """
+    Computes real current vs previous period revenue and order count deltas directly from MySQL.
+    """
+    if range_opt == "today":
+        curr_where = "WHERE DATE(order_date) = CURDATE()"
+        prior_where = "WHERE DATE(order_date) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)"
+        period_lbl = "vs yesterday"
+    elif range_opt == "7d":
+        curr_where = "WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)"
+        prior_where = "WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL 14 DAY) AND order_date < DATE_SUB(CURDATE(), INTERVAL 7 DAY)"
+        period_lbl = "vs previous 7 days"
+    elif range_opt == "30d":
+        curr_where = "WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
+        prior_where = "WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL 60 DAY) AND order_date < DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
+        period_lbl = "vs previous 30 days"
+    elif range_opt == "90d":
+        curr_where = "WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)"
+        prior_where = "WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL 180 DAY) AND order_date < DATE_SUB(CURDATE(), INTERVAL 90 DAY)"
+        period_lbl = "vs previous 90 days"
+    else:  # 12m default
+        curr_where = "WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)"
+        prior_where = "WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH) AND order_date < DATE_SUB(CURDATE(), INTERVAL 12 MONTH)"
+        period_lbl = "vs prior fiscal window"
+
+    curr_res = mgr.execute_read_only_query(
+        f"SELECT COALESCE(ROUND(SUM(total_amount), 2), 0) AS revenue, COUNT(order_id) AS orders FROM sales_orders {curr_where};"
+    )
+    prior_res = mgr.execute_read_only_query(
+        f"SELECT COALESCE(ROUND(SUM(total_amount), 2), 0) AS revenue, COUNT(order_id) AS orders FROM sales_orders {prior_where};"
+    )
+
+    curr_rev = float(curr_res["rows"][0]["revenue"]) if curr_res.get("rows") else 0.0
+    curr_orders = int(curr_res["rows"][0]["orders"]) if curr_res.get("rows") else 0
+    prior_rev = float(prior_res["rows"][0]["revenue"]) if prior_res.get("rows") else 0.0
+    prior_orders = int(prior_res["rows"][0]["orders"]) if prior_res.get("rows") else 0
+
+    if prior_rev > 0:
+        rev_pct = ((curr_rev - prior_rev) / prior_rev) * 100
+        rev_change = f"{'+' if rev_pct >= 0 else ''}{rev_pct:.1f}%"
+        rev_pos = rev_pct >= 0
+    else:
+        rev_change = "+100.0%" if curr_rev > 0 else "0.0%"
+        rev_pos = True
+
+    if prior_orders > 0:
+        ord_pct = ((curr_orders - prior_orders) / prior_orders) * 100
+        ord_change = f"{'+' if ord_pct >= 0 else ''}{ord_pct:.1f}%"
+        ord_pos = ord_pct >= 0
+    else:
+        ord_change = "+100.0%" if curr_orders > 0 else "0.0%"
+        ord_pos = True
+
+    return {
+        "curr_rev": curr_rev,
+        "curr_orders": curr_orders,
+        "rev_change": rev_change,
+        "rev_pos": rev_pos,
+        "ord_change": ord_change,
+        "ord_pos": ord_pos,
+        "period_lbl": period_lbl,
+        "date_where": curr_where
+    }
 
 
 @router.get(
@@ -216,85 +284,62 @@ def execute_analytics_query(
         }
     }
 )
+
+
 def get_live_dashboard_metrics(
     range: str = Query("12m", pattern="^(today|7d|30d|90d|12m|custom)$", description="Date range filter window: today, 7d, 30d, 90d, 12m", example="12m"),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Returns live deterministic FreshMart executive metrics directly from MySQL.
+    Returns live deterministic FreshMart executive metrics directly from MySQL with real period-over-period telemetry.
     """
     mgr = MCPDatabaseManager()
 
-    # 1. Date condition for sales
-    if range == "today":
-        date_where = "WHERE DATE(order_date) = CURDATE()"
-        period_lbl = "vs yesterday"
-    elif range == "7d":
-        date_where = "WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)"
-        period_lbl = "vs previous 7 days"
-    elif range == "30d":
-        date_where = "WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
-        period_lbl = "vs previous 30 days"
-    elif range == "90d":
-        date_where = "WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)"
-        period_lbl = "vs previous 90 days"
-    else:
-        date_where = "WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)"
-        period_lbl = "vs previous period"
+    # Calculate real-time current vs previous period metrics
+    delta = compute_sales_delta(mgr, range)
+    rev_val = delta["curr_rev"]
+    orders_val = delta["curr_orders"]
+    rev_str = format_currency_inr(rev_val)
 
-    # Query Sales & Orders
-    rev_res = mgr.execute_read_only_query(
-        f"SELECT COALESCE(ROUND(SUM(total_amount), 2), 0) AS revenue, COUNT(order_id) AS orders FROM sales_orders {date_where};"
-    )
-    rev_val = rev_res["rows"][0]["revenue"] if rev_res["rows"] else 0.0
-    orders_val = rev_res["rows"][0]["orders"] if rev_res["rows"] else 0
-
-    # Format revenue nicely
-    if rev_val >= 10000000:
-        rev_str = f"₹{rev_val / 10000000:.2f}Cr"
-    elif rev_val >= 100000:
-        rev_str = f"₹{rev_val / 100000:.1f}L"
-    else:
-        rev_str = f"₹{rev_val:,.0f}"
-
-    # Query Customers
+    # Query Real Customers
     cust_res = mgr.execute_read_only_query("SELECT COUNT(*) AS total_customers FROM customers;")
-    cust_val = cust_res["rows"][0]["total_customers"] if cust_res["rows"] else 0
+    cust_val = cust_res["rows"][0]["total_customers"] if cust_res.get("rows") else 0
 
-    # Query Employees
+    # Query Real Active Employees
     emp_res = mgr.execute_read_only_query("SELECT COUNT(*) AS total_employees FROM employees WHERE status = 'Active';")
-    emp_val = emp_res.get("rows", [{}])[0].get("total_employees", 500) if emp_res.get("rows") else 500
+    emp_val = emp_res["rows"][0]["total_employees"] if emp_res.get("rows") else 0
 
     kpis = [
         DashboardKPICard(
             title="Total Revenue",
             value=rev_str,
-            change="+12.4%",
-            isPositive=True,
-            periodText=period_lbl
+            change=delta["rev_change"],
+            isPositive=delta["rev_pos"],
+            periodText=delta["period_lbl"]
         ),
         DashboardKPICard(
             title="Total Customers",
             value=f"{cust_val:,}",
-            change="+8.2%",
+            change=f"{cust_val} Active",
             isPositive=True,
             periodText="active B2B accounts"
         ),
         DashboardKPICard(
             title="Total Orders",
             value=f"{orders_val:,}",
-            change="+15.7%",
-            isPositive=True,
-            periodText=period_lbl
+            change=delta["ord_change"],
+            isPositive=delta["ord_pos"],
+            periodText=delta["period_lbl"]
         ),
         DashboardKPICard(
             title="Active Employees",
             value=f"{emp_val:,}",
-            change="+2.1%",
+            change=f"{emp_val} Headcount",
             isPositive=True,
             periodText="across 10 departments"
         ),
     ]
+
 
     # Query Sales Trend
     trend_res = mgr.execute_read_only_query(
@@ -351,7 +396,7 @@ def get_live_dashboard_metrics(
             category=str(r.get("category", "General")),
             revenue=float(r.get("revenue", 0.0)),
             orders=int(r.get("orders", 0)),
-            growth="+18.4%",
+            growth=f"{round((float(r.get('revenue', 0.0)) / (rev_val if rev_val > 0 else 1.0)) * 100, 1)}% share",
             stock=int(r.get("stock", 0))
         )
         for r in top_res.get("rows", [])
@@ -473,48 +518,47 @@ def get_role_dashboard_payload(role_slug: str, range_opt: str, current_user: Use
 
     mgr = MCPDatabaseManager()
 
-    # Determine date condition for sales
-    if range_opt == "today":
-        date_where = "WHERE DATE(order_date) = CURDATE()"
-        period_lbl = "vs yesterday"
-    elif range_opt == "7d":
-        date_where = "WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)"
-        period_lbl = "vs previous 7 days"
-    elif range_opt == "30d":
-        date_where = "WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
-        period_lbl = "vs previous 30 days"
-    elif range_opt == "90d":
-        date_where = "WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)"
-        period_lbl = "vs previous 90 days"
-    else:
-        date_where = "WHERE order_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)"
-        period_lbl = "vs previous period"
-
-    # Default common sales query
-    rev_res = mgr.execute_read_only_query(
-        f"SELECT COALESCE(ROUND(SUM(total_amount), 2), 0) AS revenue, COUNT(order_id) AS orders FROM sales_orders {date_where};"
-    )
-    rev_val = rev_res["rows"][0]["revenue"] if rev_res["rows"] else 0.0
-    orders_val = rev_res["rows"][0]["orders"] if rev_res["rows"] else 0
+    # Calculate real-time sales delta
+    delta = compute_sales_delta(mgr, range_opt)
+    rev_val = delta["curr_rev"]
+    orders_val = delta["curr_orders"]
     rev_str = format_currency_inr(rev_val)
+    date_where = delta["date_where"]
+    period_lbl = delta["period_lbl"]
 
     if slug == "ceo":
         cust_res = mgr.execute_read_only_query("SELECT COUNT(*) AS total_customers FROM customers;")
-        cust_val = cust_res["rows"][0]["total_customers"] if cust_res.get("rows") else 320
+        cust_val = cust_res["rows"][0]["total_customers"] if cust_res.get("rows") else 0
         emp_res = mgr.execute_read_only_query("SELECT COUNT(*) AS total_employees FROM employees WHERE status = 'Active';")
-        emp_val = emp_res["rows"][0]["total_employees"] if emp_res.get("rows") else 500
+        emp_val = emp_res["rows"][0]["total_employees"] if emp_res.get("rows") else 0
         fin_latest = mgr.execute_read_only_query(
-            "SELECT net_profit, profit_margin_pct FROM company_financials ORDER BY fiscal_year DESC, month_num DESC LIMIT 1;"
+            "SELECT net_profit, profit_margin_pct FROM company_financials ORDER BY fiscal_year DESC, month_num DESC LIMIT 2;"
         )
-        latest_profit = fin_latest["rows"][0]["net_profit"] if fin_latest.get("rows") else 600000
-        latest_margin = fin_latest["rows"][0]["profit_margin_pct"] if fin_latest.get("rows") else 21.5
+        if fin_latest.get("rows") and len(fin_latest["rows"]) >= 2:
+            latest_profit = float(fin_latest["rows"][0]["net_profit"])
+            prior_profit = float(fin_latest["rows"][1]["net_profit"])
+            latest_margin = float(fin_latest["rows"][0]["profit_margin_pct"])
+            prof_diff = ((latest_profit - prior_profit) / abs(prior_profit)) * 100 if prior_profit != 0 else 0
+            profit_change_str = f"{'+' if prof_diff >= 0 else ''}{prof_diff:.1f}%"
+            profit_is_pos = prof_diff >= 0
+        elif fin_latest.get("rows") and len(fin_latest["rows"]) == 1:
+            latest_profit = float(fin_latest["rows"][0]["net_profit"])
+            latest_margin = float(fin_latest["rows"][0]["profit_margin_pct"])
+            profit_change_str = "Latest"
+            profit_is_pos = True
+        else:
+            latest_profit = 0.0
+            latest_margin = 0.0
+            profit_change_str = "0.0%"
+            profit_is_pos = True
 
         kpis = [
-            DashboardKPICard(title="Total Revenue", value=rev_str, change="+12.4%", isPositive=True, periodText=period_lbl),
-            DashboardKPICard(title="Net Profit", value=format_currency_inr(float(latest_profit)), change="+14.8%", isPositive=True, periodText=f"Margin: {latest_margin}%"),
-            DashboardKPICard(title="Total Orders", value=f"{orders_val:,}", change="+15.7%", isPositive=True, periodText=period_lbl),
-            DashboardKPICard(title="Active Employees", value=f"{emp_val:,}", change="+2.1%", isPositive=True, periodText="across 10 departments"),
+            DashboardKPICard(title="Total Revenue", value=rev_str, change=delta["rev_change"], isPositive=delta["rev_pos"], periodText=period_lbl),
+            DashboardKPICard(title="Net Profit", value=format_currency_inr(float(latest_profit)), change=profit_change_str, isPositive=profit_is_pos, periodText=f"Margin: {latest_margin}%"),
+            DashboardKPICard(title="Total Orders", value=f"{orders_val:,}", change=delta["ord_change"], isPositive=delta["ord_pos"], periodText=period_lbl),
+            DashboardKPICard(title="Active Employees", value=f"{emp_val:,}", change=f"{emp_val} Headcount", isPositive=True, periodText="across 10 departments"),
         ]
+
 
         trend_res = mgr.execute_read_only_query(
             "SELECT DATE_FORMAT(order_date, '%b %y') AS month, ROUND(SUM(total_amount), 2) AS revenue, COUNT(order_id) AS orders "
@@ -542,7 +586,9 @@ def get_role_dashboard_payload(role_slug: str, range_opt: str, current_user: Use
         )
         top_products = [
             TopProductPoint(id=str(r.get("id", "P000")), name=str(r.get("name", "Product")), category=str(r.get("category", "General")),
-                            revenue=float(r.get("revenue", 0.0)), orders=int(r.get("orders", 0)), growth="+18.4%", stock=int(r.get("stock", 0)))
+                            revenue=float(r.get("revenue", 0.0)), orders=int(r.get("orders", 0)),
+                            growth=f"{round((float(r.get('revenue', 0.0)) / (rev_val if rev_val > 0 else 1.0)) * 100, 1)}% share",
+                            stock=int(r.get("stock", 0)))
             for r in top_res.get("rows", [])
         ]
         fin_trend_res = mgr.execute_read_only_query(
@@ -550,6 +596,15 @@ def get_role_dashboard_payload(role_slug: str, range_opt: str, current_user: Use
             "FROM company_financials ORDER BY fiscal_year ASC, month_num ASC LIMIT 12;"
         )
         financial_trend = fin_trend_res.get("rows", [])
+
+        dept_res = mgr.execute_read_only_query(
+            "SELECT d.dept_name as department, COUNT(e.employee_id) as headcount, "
+            "ROUND(AVG(s.base_salary), 2) as avg_salary, ROUND(SUM(s.base_salary), 2) as total_payroll "
+            "FROM departments d JOIN employees e ON d.dept_id = e.department_id "
+            "JOIN salaries s ON e.employee_id = s.employee_id WHERE e.status = 'Active' "
+            "GROUP BY d.dept_id, d.dept_name ORDER BY headcount DESC;"
+        )
+        department_summary = dept_res.get("rows", [])
 
         insights = [
             DashboardInsight(id="INS-CEO-01", title="Executive Revenue Growth Momentum", description="Enterprise top-line revenue has expanded +18.6% year-over-year, driven by accelerated retail supermarket demand.", category="Sales", impact="high", date="Live Telemetry", source="sales_orders"),
@@ -568,21 +623,23 @@ def get_role_dashboard_payload(role_slug: str, range_opt: str, current_user: Use
             financial_trend=financial_trend,
             category_distribution=categories,
             top_products=top_products,
+            department_summary=department_summary,
             insights=insights
         )
 
     elif slug == "sales":
         cust_res = mgr.execute_read_only_query("SELECT COUNT(*) AS total_customers FROM customers;")
-        cust_val = cust_res["rows"][0]["total_customers"] if cust_res.get("rows") else 320
+        cust_val = cust_res["rows"][0]["total_customers"] if cust_res.get("rows") else 0
         leads_res = mgr.execute_read_only_query("SELECT COUNT(*) AS total_leads FROM leads;")
-        leads_val = leads_res["rows"][0]["total_leads"] if leads_res.get("rows") else 550
+        leads_val = leads_res["rows"][0]["total_leads"] if leads_res.get("rows") else 0
 
         kpis = [
-            DashboardKPICard(title="Total Gross Sales", value=rev_str, change="+12.4%", isPositive=True, periodText=period_lbl),
-            DashboardKPICard(title="Completed Orders", value=f"{orders_val:,}", change="+15.7%", isPositive=True, periodText=period_lbl),
-            DashboardKPICard(title="Active B2B Clients", value=f"{cust_val:,}", change="+8.2%", isPositive=True, periodText="commercial accounts"),
-            DashboardKPICard(title="CRM Leads Pipeline", value=f"{leads_val:,}", change="+11.5%", isPositive=True, periodText="active prospect pipeline"),
+            DashboardKPICard(title="Total Gross Sales", value=rev_str, change=delta["rev_change"], isPositive=delta["rev_pos"], periodText=period_lbl),
+            DashboardKPICard(title="Completed Orders", value=f"{orders_val:,}", change=delta["ord_change"], isPositive=delta["ord_pos"], periodText=period_lbl),
+            DashboardKPICard(title="Active B2B Clients", value=f"{cust_val:,}", change=f"{cust_val} Active", isPositive=True, periodText="commercial accounts"),
+            DashboardKPICard(title="CRM Leads Pipeline", value=f"{leads_val:,}", change=f"{leads_val} Leads", isPositive=True, periodText="active prospect pipeline"),
         ]
+
 
         trend_res = mgr.execute_read_only_query(
             "SELECT DATE_FORMAT(order_date, '%b %y') AS month, ROUND(SUM(total_amount), 2) AS revenue, COUNT(order_id) AS orders "
@@ -623,7 +680,9 @@ def get_role_dashboard_payload(role_slug: str, range_opt: str, current_user: Use
         )
         top_products = [
             TopProductPoint(id=str(r.get("id", "P000")), name=str(r.get("name", "Product")), category=str(r.get("category", "General")),
-                            revenue=float(r.get("revenue", 0.0)), orders=int(r.get("orders", 0)), growth="+18.4%", stock=int(r.get("stock", 0)))
+                            revenue=float(r.get("revenue", 0.0)), orders=int(r.get("orders", 0)),
+                            growth=f"{round((float(r.get('revenue', 0.0)) / (rev_val if rev_val > 0 else 1.0)) * 100, 1)}% share",
+                            stock=int(r.get("stock", 0)))
             for r in top_res.get("rows", [])
         ]
 
@@ -649,20 +708,20 @@ def get_role_dashboard_payload(role_slug: str, range_opt: str, current_user: Use
 
     elif slug == "hr":
         emp_res = mgr.execute_read_only_query("SELECT COUNT(*) AS total_employees FROM employees WHERE status = 'Active';")
-        emp_val = emp_res["rows"][0]["total_employees"] if emp_res.get("rows") else 500
+        emp_val = emp_res["rows"][0]["total_employees"] if emp_res.get("rows") else 0
         dept_cnt = mgr.execute_read_only_query("SELECT COUNT(*) AS total_depts FROM departments;")
-        dept_val = dept_cnt["rows"][0]["total_depts"] if dept_cnt.get("rows") else 10
+        dept_val = dept_cnt["rows"][0]["total_depts"] if dept_cnt.get("rows") else 0
         pay_res = mgr.execute_read_only_query(
             "SELECT ROUND(AVG(base_salary), 2) as avg_salary, ROUND(SUM(base_salary), 2) as total_payroll FROM salaries;"
         )
-        avg_sal = pay_res["rows"][0]["avg_salary"] if pay_res.get("rows") else 55420.0
-        tot_payroll = pay_res["rows"][0]["total_payroll"] if pay_res.get("rows") else 27710000.0
+        avg_sal = pay_res["rows"][0]["avg_salary"] if pay_res.get("rows") else 0.0
+        tot_payroll = pay_res["rows"][0]["total_payroll"] if pay_res.get("rows") else 0.0
 
         kpis = [
-            DashboardKPICard(title="Active Workforce", value=f"{emp_val:,}", change="+2.1%", isPositive=True, periodText="verified employees"),
-            DashboardKPICard(title="Operating Departments", value=f"{dept_val}", change="100% active", isPositive=True, periodText="business divisions"),
-            DashboardKPICard(title="Average Base Salary", value=f"₹{avg_sal:,.0f}", change="+4.5%", isPositive=True, periodText="monthly per employee"),
-            DashboardKPICard(title="Monthly Payroll", value=format_currency_inr(float(tot_payroll)), change="+2.1%", isPositive=True, periodText="company-wide payroll"),
+            DashboardKPICard(title="Active Workforce", value=f"{emp_val:,}", change=f"{emp_val} Active", isPositive=True, periodText="verified employees"),
+            DashboardKPICard(title="Operating Departments", value=f"{dept_val}", change=f"{dept_val} Divisions", isPositive=True, periodText="business divisions"),
+            DashboardKPICard(title="Average Base Salary", value=f"₹{avg_sal:,.0f}", change="Monthly Avg", isPositive=True, periodText="monthly per employee"),
+            DashboardKPICard(title="Monthly Payroll", value=format_currency_inr(float(tot_payroll)), change="Fully Reconciled", isPositive=True, periodText="company-wide payroll"),
         ]
 
         dept_res = mgr.execute_read_only_query(
@@ -699,20 +758,53 @@ def get_role_dashboard_payload(role_slug: str, range_opt: str, current_user: Use
     elif slug == "finance":
         fin_latest = mgr.execute_read_only_query(
             "SELECT total_revenue, total_expenses, cogs, operating_expenses, net_profit, profit_margin_pct "
-            "FROM company_financials ORDER BY fiscal_year DESC, month_num DESC LIMIT 1;"
+            "FROM company_financials ORDER BY fiscal_year DESC, month_num DESC LIMIT 2;"
         )
-        f_row = fin_latest["rows"][0] if fin_latest.get("rows") else {}
-        gross_rev = float(f_row.get("total_revenue", 3850000.0))
-        tot_exp = float(f_row.get("total_expenses", 3250000.0))
-        net_prof = float(f_row.get("net_profit", 600000.0))
-        margin_pct = float(f_row.get("profit_margin_pct", 15.58))
+        if fin_latest.get("rows") and len(fin_latest["rows"]) >= 2:
+            f0 = fin_latest["rows"][0]
+            f1 = fin_latest["rows"][1]
+            gross_rev = float(f0.get("total_revenue", 0.0))
+            tot_exp = float(f0.get("total_expenses", 0.0))
+            net_prof = float(f0.get("net_profit", 0.0))
+            margin_pct = float(f0.get("profit_margin_pct", 0.0))
+
+            p_rev = float(f1.get("total_revenue", 1.0))
+            p_exp = float(f1.get("total_expenses", 1.0))
+            p_prof = float(f1.get("net_profit", 1.0))
+            p_margin = float(f1.get("profit_margin_pct", 1.0))
+
+            rev_pct = ((gross_rev - p_rev) / p_rev) * 100 if p_rev != 0 else 0
+            exp_pct = ((tot_exp - p_exp) / p_exp) * 100 if p_exp != 0 else 0
+            prof_pct = ((net_prof - p_prof) / abs(p_prof)) * 100 if p_prof != 0 else 0
+            mar_diff = margin_pct - p_margin
+
+            rev_change_str = f"{'+' if rev_pct >= 0 else ''}{rev_pct:.1f}%"
+            exp_change_str = f"{'+' if exp_pct >= 0 else ''}{exp_pct:.1f}%"
+            prof_change_str = f"{'+' if prof_pct >= 0 else ''}{prof_pct:.1f}%"
+            mar_change_str = f"{'+' if mar_diff >= 0 else ''}{mar_diff:.1f}%"
+        elif fin_latest.get("rows") and len(fin_latest["rows"]) == 1:
+            f0 = fin_latest["rows"][0]
+            gross_rev = float(f0.get("total_revenue", 0.0))
+            tot_exp = float(f0.get("total_expenses", 0.0))
+            net_prof = float(f0.get("net_profit", 0.0))
+            margin_pct = float(f0.get("profit_margin_pct", 0.0))
+            rev_change_str = "Latest"
+            exp_change_str = "Latest"
+            prof_change_str = "Latest"
+            mar_change_str = "Latest"
+            rev_pct, exp_pct, prof_pct, mar_diff = 0, 0, 0, 0
+        else:
+            gross_rev, tot_exp, net_prof, margin_pct = 0.0, 0.0, 0.0, 0.0
+            rev_change_str, exp_change_str, prof_change_str, mar_change_str = "0.0%", "0.0%", "0.0%", "0.0%"
+            rev_pct, exp_pct, prof_pct, mar_diff = 0, 0, 0, 0
 
         kpis = [
-            DashboardKPICard(title="Monthly Revenue", value=format_currency_inr(gross_rev), change="+6.8%", isPositive=True, periodText="latest fiscal month"),
-            DashboardKPICard(title="Total Expenses", value=format_currency_inr(tot_exp), change="+18.4%", isPositive=False, periodText="cogs + operating"),
-            DashboardKPICard(title="Net Profit", value=format_currency_inr(net_prof), change="-50.0%", isPositive=False, periodText="August contraction"),
-            DashboardKPICard(title="Profit Margin", value=f"{margin_pct:.1f}%", change="-8.3%", isPositive=False, periodText="net margin ratio"),
+            DashboardKPICard(title="Monthly Revenue", value=format_currency_inr(gross_rev), change=rev_change_str, isPositive=rev_pct >= 0, periodText="vs prior month"),
+            DashboardKPICard(title="Total Expenses", value=format_currency_inr(tot_exp), change=exp_change_str, isPositive=exp_pct <= 0, periodText="cogs + operating"),
+            DashboardKPICard(title="Net Profit", value=format_currency_inr(net_prof), change=prof_change_str, isPositive=prof_pct >= 0, periodText="net earnings"),
+            DashboardKPICard(title="Profit Margin", value=f"{margin_pct:.1f}%", change=mar_change_str, isPositive=mar_diff >= 0, periodText="net margin ratio"),
         ]
+
 
         fin_trend_res = mgr.execute_read_only_query(
             "SELECT fiscal_year, month_name, total_revenue, cogs, operating_expenses, net_profit, profit_margin_pct "
@@ -757,21 +849,21 @@ def get_role_dashboard_payload(role_slug: str, range_opt: str, current_user: Use
         inv_val_res = mgr.execute_read_only_query(
             "SELECT ROUND(SUM(i.quantity_on_hand * p.unit_cost), 2) as valuation FROM inventory i JOIN products p ON i.product_id = p.product_id;"
         )
-        inv_val = float(inv_val_res["rows"][0]["valuation"]) if inv_val_res.get("rows") else 6266957.61
+        inv_val = float(inv_val_res["rows"][0]["valuation"]) if (inv_val_res.get("rows") and inv_val_res["rows"][0]["valuation"] is not None) else 0.0
         low_res = mgr.execute_read_only_query(
             "SELECT COUNT(*) AS low_count FROM inventory i JOIN products p ON i.product_id = p.product_id WHERE i.quantity_on_hand <= p.reorder_level;"
         )
-        low_count = low_res["rows"][0]["low_count"] if low_res.get("rows") else 12
+        low_count = int(low_res["rows"][0]["low_count"]) if low_res.get("rows") else 0
         supp_res = mgr.execute_read_only_query("SELECT COUNT(*) AS total_suppliers FROM suppliers;")
-        supp_val = supp_res["rows"][0]["total_suppliers"] if supp_res.get("rows") else 40
+        supp_val = int(supp_res["rows"][0]["total_suppliers"]) if supp_res.get("rows") else 0
         po_res = mgr.execute_read_only_query("SELECT COUNT(*) AS total_pos FROM purchase_orders;")
-        po_val = po_res["rows"][0]["total_pos"] if po_res.get("rows") else 550
+        po_val = int(po_res["rows"][0]["total_pos"]) if po_res.get("rows") else 0
 
         kpis = [
-            DashboardKPICard(title="Warehouse Valuation", value=format_currency_inr(inv_val), change="+3.4%", isPositive=True, periodText="stock on hand at cost"),
-            DashboardKPICard(title="Low-Stock SKUs", value=f"{low_count}", change="Action Required", isPositive=False, periodText="below safety buffer"),
-            DashboardKPICard(title="Active Suppliers", value=f"{supp_val}", change="100% active", isPositive=True, periodText="certified trade partners"),
-            DashboardKPICard(title="Purchase Orders", value=f"{po_val:,}", change="+14.2%", isPositive=True, periodText="inventory replenishment"),
+            DashboardKPICard(title="Warehouse Valuation", value=format_currency_inr(inv_val), change="Stock on Hand", isPositive=True, periodText="total asset valuation"),
+            DashboardKPICard(title="Low-Stock SKUs", value=f"{low_count}", change=f"{low_count} SKUs Alert" if low_count > 0 else "All Stocked", isPositive=low_count == 0, periodText="below safety buffer"),
+            DashboardKPICard(title="Active Suppliers", value=f"{supp_val}", change=f"{supp_val} Active", isPositive=True, periodText="certified trade partners"),
+            DashboardKPICard(title="Purchase Orders", value=f"{po_val:,}", change=f"{po_val} Total POs", isPositive=True, periodText="inventory replenishment"),
         ]
 
         low_items_res = mgr.execute_read_only_query(
@@ -820,24 +912,24 @@ def get_role_dashboard_payload(role_slug: str, range_opt: str, current_user: Use
         po_spend_res = mgr.execute_read_only_query(
             "SELECT COUNT(*) as total_pos, ROUND(SUM(total_amount), 2) as total_spend FROM purchase_orders;"
         )
-        po_spend = float(po_spend_res["rows"][0]["total_spend"]) if po_spend_res.get("rows") else 18600000.0
-        po_count = int(po_spend_res["rows"][0]["total_pos"]) if po_spend_res.get("rows") else 550
+        po_spend = float(po_spend_res["rows"][0]["total_spend"]) if (po_spend_res.get("rows") and po_spend_res["rows"][0]["total_spend"] is not None) else 0.0
+        po_count = int(po_spend_res["rows"][0]["total_pos"]) if po_spend_res.get("rows") else 0
         prod_cnt = mgr.execute_read_only_query("SELECT COUNT(*) AS total_skus FROM products WHERE is_active = 1;")
-        sku_val = prod_cnt["rows"][0]["total_skus"] if prod_cnt.get("rows") else 220
+        sku_val = int(prod_cnt["rows"][0]["total_skus"]) if prod_cnt.get("rows") else 0
         supp_res = mgr.execute_read_only_query("SELECT COUNT(*) AS total_suppliers FROM suppliers;")
-        supp_val = supp_res["rows"][0]["total_suppliers"] if supp_res.get("rows") else 40
+        supp_val = int(supp_res["rows"][0]["total_suppliers"]) if supp_res.get("rows") else 0
 
         kpis = [
-            DashboardKPICard(title="Procurement Spend", value=format_currency_inr(po_spend), change="+14.2%", isPositive=True, periodText="total PO allocation"),
-            DashboardKPICard(title="Sales Order Volume", value=rev_str, change="+12.4%", isPositive=True, periodText="fulfilled orders"),
-            DashboardKPICard(title="Active Catalog SKUs", value=f"{sku_val}", change="100% active", isPositive=True, periodText="catalog master list"),
-            DashboardKPICard(title="Registered Vendors", value=f"{supp_val}", change="+5.0%", isPositive=True, periodText="active suppliers"),
+            DashboardKPICard(title="Procurement Spend", value=format_currency_inr(po_spend), change=f"{po_count} POs", isPositive=True, periodText="total PO allocation"),
+            DashboardKPICard(title="Sales Order Volume", value=rev_str, change=delta["rev_change"], isPositive=delta["rev_pos"], periodText="fulfilled orders"),
+            DashboardKPICard(title="Active Catalog SKUs", value=f"{sku_val}", change=f"{sku_val} SKUs", isPositive=True, periodText="catalog master list"),
+            DashboardKPICard(title="Registered Vendors", value=f"{supp_val}", change=f"{supp_val} Active", isPositive=True, periodText="active suppliers"),
         ]
 
         top_supp_res = mgr.execute_read_only_query(
-            "SELECT s.supplier_name, COUNT(po.po_id) as po_count, ROUND(SUM(po.total_amount), 2) as total_spend, s.payment_terms "
+            "SELECT s.supplier_name, COUNT(po.po_id) as po_count, ROUND(SUM(po.total_amount), 2) as total_spend, s.city "
             "FROM suppliers s JOIN purchase_orders po ON s.supplier_id = po.supplier_id "
-            "GROUP BY s.supplier_id, s.supplier_name, s.payment_terms ORDER BY total_spend DESC LIMIT 5;"
+            "GROUP BY s.supplier_id, s.supplier_name, s.city ORDER BY total_spend DESC LIMIT 5;"
         )
         top_suppliers = top_supp_res.get("rows", [])
 
@@ -956,9 +1048,9 @@ def get_enterprise_insights(
     fin_rows = fin_res.get("rows", [])
     july = next((r for r in fin_rows if r.get("month_name") == "July"), {})
     aug = next((r for r in fin_rows if r.get("month_name") == "August"), {})
-    j_prof = float(july.get("net_profit", 1200000))
-    a_prof = float(aug.get("net_profit", 600000))
-    prof_change_pct = ((a_prof - j_prof) / j_prof) * 100
+    j_prof = float(july.get("net_profit") or 0.0)
+    a_prof = float(aug.get("net_profit") or 0.0)
+    prof_change_pct = ((a_prof - j_prof) / j_prof) * 100 if j_prof > 0 else 0.0
 
     # 2. Inventory Alert: Count SKUs below reorder level
     low_res = db.execute_read_only_query(
@@ -972,7 +1064,7 @@ def get_enterprise_insights(
     )
     low_skus = low_res.get("rows", [])
     low_count = len(low_skus)
-    top_deficit_name = low_skus[0].get("product_name", "Organic Avocados") if low_skus else "Catalog SKUs"
+    top_deficit_name = low_skus[0].get("product_name", "Catalog Products") if low_skus else "Catalog SKUs"
 
     # 3. Expense Ledger Anomaly: Emergency Shipping
     exp_res = db.execute_read_only_query(
@@ -983,16 +1075,16 @@ def get_enterprise_insights(
         "WHERE category = 'Emergency Shipping';"
     )
     exp_row = (exp_res.get("rows", []) or [{}])[0]
-    j_em = float(exp_row.get("july_em", 89326))
-    a_em = float(exp_row.get("august_em", 430000))
-    em_change_pct = ((a_em - j_em) / j_em) * 100 if j_em > 0 else 381.4
+    j_em = float(exp_row.get("july_em") or 0.0)
+    a_em = float(exp_row.get("august_em") or 0.0)
+    em_change_pct = ((a_em - j_em) / j_em) * 100 if j_em > 0 else 0.0
 
     insights_data = [
         EnterpriseInsightCard(
             id="INS-FIN-01",
             category="Financial Insights",
             title="August 2026 Margin Contraction",
-            summary="Net profit contracted by 50.0% (-₹600,000) from ₹1,200,000 in July to ₹600,000 in August due to combined freight disruptions and revenue dip.",
+            summary=f"Net profit contracted by {abs(prof_change_pct):.1f}% (₹{a_prof - j_prof:,.0f}) from ₹{j_prof:,.0f} in July to ₹{a_prof:,.0f} in August due to combined freight disruptions and revenue dip.",
             metric=f"Net Profit: ₹{a_prof:,.0f}",
             change=f"{prof_change_pct:.1f}%",
             impact="HIGH",
@@ -1046,9 +1138,28 @@ def get_enterprise_insights(
         )
     ]
 
+    user_role = current_user.role.role_name.upper() if current_user.role else "CEO"
+
+    # Filter insights based on user role to avoid disclosure of confidential domains
+    if user_role not in ["CEO", "ADMIN"]:
+        if user_role == "SALES_MANAGER":
+            insights_data = [i for i in insights_data if i.category in ["CRM Insights", "Inventory Alerts"]]
+            anomalies_data = [] # Financial shipping anomalies not disclosed to Sales Manager
+        elif user_role == "FINANCE_MANAGER":
+            insights_data = [i for i in insights_data if i.category in ["Financial Insights", "Operational Recommendations"]]
+        elif user_role == "INVENTORY_MANAGER":
+            insights_data = [i for i in insights_data if i.category in ["Inventory Alerts", "Operational Recommendations"]]
+            anomalies_data = []
+        elif user_role == "HR_MANAGER":
+            insights_data = []
+            anomalies_data = []
+        elif user_role == "ERP_MANAGER":
+            insights_data = [i for i in insights_data if i.category in ["Inventory Alerts", "Operational Recommendations"]]
+
     return EnterpriseInsightsResponse(
         success=True,
         insights=insights_data,
         anomalies=anomalies_data,
-        timestamp=datetime.utcnow()
+        timestamp=get_current_ist()
     )
+

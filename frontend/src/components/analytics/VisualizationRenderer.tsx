@@ -24,7 +24,7 @@ interface VisualizationRendererProps {
   rows: Record<string, any>[];
 }
 
-const PALETTE = ['#10B981', '#06B6D4', '#6366F1', '#F59E0B', '#EC4899', '#8B5CF6', '#14B8A6'];
+const PALETTE = ['#10B981', '#06B6D4', '#6366F1', '#F59E0B', '#EC4899', '#8B5CF6', '#14B8A6', '#3B82F6'];
 
 export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
   hint,
@@ -39,7 +39,26 @@ export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
     );
   }
 
-  // 1. Resolve Hint Type and Custom Axes if specified as an object
+  // 1. Sanitize & Normalize Rows: Convert numeric strings to real floats
+  const sanitizedRows = rows.map((r) => {
+    const rowCopy: Record<string, any> = { ...r };
+    for (const key of Object.keys(rowCopy)) {
+      const val = rowCopy[key];
+      if (typeof val === 'number') continue;
+      if (typeof val === 'string' && val.trim() !== '') {
+        const num = Number(val);
+        // Only convert if it's a genuine numeric string and not an ID like 'P01' or '2026-08-01'
+        if (!isNaN(num) && !val.includes('-') && !val.startsWith('0') && !val.startsWith('+')) {
+          rowCopy[key] = num;
+        } else if (!isNaN(num) && (val === '0' || Number.isInteger(num))) {
+          rowCopy[key] = num;
+        }
+      }
+    }
+    return rowCopy;
+  });
+
+  // 2. Resolve Hint Type and Custom Axes
   let hintType = 'table';
   let customX: string | undefined;
   let customY: string | undefined;
@@ -54,29 +73,60 @@ export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
     hintType = hint;
   }
 
-  // Normalize hintType
+  // Normalize hintType string
   if (hintType === 'line_chart') hintType = 'line';
   if (hintType === 'bar_chart') hintType = 'bar';
   if (hintType === 'pie_chart') hintType = 'pie';
   if (hintType === 'metric_card') hintType = 'kpi';
 
-  // 2. Identify Dimensions (X-Axis) and Numeric Metrics (Y-Axis)
-  const xKey = customX || columns[0] || 'category';
-  const numericColumns = columns.filter((col) => {
-    return col !== xKey && rows.some((r) => typeof r[col] === 'number');
+  // 3. Identify Dimensions (X-Axis) and Numeric Metrics (Y-Axis)
+  const allCols = columns.length > 0 ? columns : Object.keys(sanitizedRows[0] || {});
+
+  // Find dimension column: look for common string/date identifiers first
+  const dimensionCandidates = allCols.filter((col) => {
+    const lower = col.toLowerCase();
+    return (
+      lower.includes('month') ||
+      lower.includes('date') ||
+      lower.includes('name') ||
+      lower.includes('category') ||
+      lower.includes('status') ||
+      lower.includes('department') ||
+      lower.includes('dept') ||
+      lower.includes('product') ||
+      lower.includes('supplier') ||
+      lower.includes('customer') ||
+      lower.includes('city')
+    );
   });
 
-  const yKey = customY || numericColumns[0] || columns[1] || columns[0];
+  const xKey =
+    customX ||
+    (dimensionCandidates.length > 0 ? dimensionCandidates[0] : allCols[0]) ||
+    'category';
 
-  // 3. Automatic Fallback Logic if Hint is Missing or Generic
+  // Find numeric metrics: columns where values are numbers
+  const numericColumns = allCols.filter((col) => {
+    if (col === xKey) return false;
+    return sanitizedRows.some((r) => typeof r[col] === 'number');
+  });
+
+  const yKey = customY || (numericColumns.length > 0 ? numericColumns[0] : allCols[1] || allCols[0]);
+
+  // 4. Automatic Fallback Logic if Hint is Missing or Generic
   if (!hint || hintType === 'table') {
-    if (rows.length === 1 && numericColumns.length === 1) {
+    if (sanitizedRows.length === 1 && numericColumns.length === 1) {
       hintType = 'kpi';
     } else {
       const xKeyLower = xKey.toLowerCase();
-      if (xKeyLower.includes('month') || xKeyLower.includes('date') || xKeyLower.includes('year')) {
+      if (
+        xKeyLower.includes('month') ||
+        xKeyLower.includes('date') ||
+        xKeyLower.includes('year') ||
+        xKeyLower.includes('period')
+      ) {
         hintType = 'line';
-      } else if (numericColumns.length >= 1 && rows.length <= 6) {
+      } else if (numericColumns.length >= 1 && sanitizedRows.length <= 6) {
         hintType = 'donut';
       } else if (numericColumns.length >= 1) {
         hintType = 'bar';
@@ -84,7 +134,7 @@ export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
     }
   }
 
-  // Helper: Format values nicely with rupee sign and magnitude
+  // Helper: Format values with Rupee symbol and Indian numerical abbreviations
   const formatValue = (v: any) => {
     if (typeof v === 'number') {
       if (Math.abs(v) >= 10000000) return `₹${(v / 10000000).toFixed(2)}Cr`;
@@ -98,16 +148,21 @@ export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
   const renderTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-[#0B0F19] border border-slate-700 rounded-lg p-2.5 text-xs shadow-2xl z-50">
-          <p className="font-semibold text-white mb-1.5 border-b border-slate-800 pb-1">{label}</p>
-          {payload.map((p: any, idx: number) => (
-            <div key={idx} className="flex items-center justify-between gap-3 text-xs font-mono py-0.5">
-              <span className="text-slate-400 capitalize">{p.name.replace(/_/g, ' ')}:</span>
-              <span style={{ color: p.color || '#10B981' }} className="font-semibold">
-                {formatValue(p.value)}
-              </span>
-            </div>
-          ))}
+        <div className="bg-[#0B0F19] border border-slate-700/90 rounded-xl p-3 text-xs shadow-2xl z-50 min-w-[160px]">
+          <p className="font-bold text-white mb-2 border-b border-slate-800 pb-1.5">{label}</p>
+          <div className="space-y-1">
+            {payload.map((p: any, idx: number) => (
+              <div key={idx} className="flex items-center justify-between gap-3 text-xs font-mono py-0.5">
+                <span className="text-slate-400 capitalize flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color || PALETTE[idx % PALETTE.length] }} />
+                  <span>{p.name.replace(/_/g, ' ')}:</span>
+                </span>
+                <span style={{ color: p.color || '#10B981' }} className="font-bold">
+                  {formatValue(p.value)}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       );
     }
@@ -115,12 +170,12 @@ export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
   };
 
   // Case A: KPI / Metric Card
-  if (hintType === 'kpi' || (rows.length === 1 && numericColumns.length === 1)) {
-    const valKey = numericColumns[0] || columns[1] || columns[0];
-    const val = rows[0][valKey];
+  if (hintType === 'kpi' || (sanitizedRows.length === 1 && numericColumns.length === 1)) {
+    const valKey = numericColumns[0] || allCols[1] || allCols[0];
+    const val = sanitizedRows[0][valKey];
     return (
-      <div className="p-6 bg-[#080C14] border border-slate-800 rounded-xl text-center shadow-lg">
-        {customTitle && <p className="text-xs text-slate-400 font-medium mb-1">{customTitle}</p>}
+      <div className="p-6 bg-gradient-to-br from-[#0B0F19] to-[#080C14] border border-emerald-500/30 rounded-2xl text-center shadow-lg">
+        {customTitle && <p className="text-xs text-slate-400 font-medium mb-1.5">{customTitle}</p>}
         <span className="text-xs uppercase font-bold text-slate-400 tracking-wider">
           {valKey.replace(/_/g, ' ')}
         </span>
@@ -134,24 +189,33 @@ export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
   // Case B: Donut / Pie Chart
   if (hintType === 'pie' || hintType === 'donut') {
     const isDonut = hintType === 'donut';
-    const pieData = rows.slice(0, 10).map((r, i) => ({
+    const pieData = sanitizedRows.slice(0, 8).map((r, i) => ({
       name: String(r[xKey] ?? `Item ${i + 1}`),
-      value: Number(r[yKey] ?? 1),
+      value: Number(r[yKey] ?? 0),
     }));
 
     return (
-      <div className="space-y-2">
-        {customTitle && <h6 className="text-xs font-semibold text-slate-300">{customTitle}</h6>}
-        <div className="h-64 w-full relative flex items-center justify-center">
+      <div className="space-y-3">
+        {customTitle && <h6 className="text-xs font-bold text-slate-300">{customTitle}</h6>}
+        <div className="h-64 sm:h-72 w-full relative flex items-center justify-center">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Tooltip
                 content={({ active, payload }: any) => {
                   if (active && payload && payload.length) {
+                    const total = pieData.reduce((acc, curr) => acc + curr.value, 0);
+                    const pct = total > 0 ? ((payload[0].value / total) * 100).toFixed(1) : 0;
                     return (
-                      <div className="bg-[#0B0F19] border border-slate-700 rounded-lg p-2.5 text-xs shadow-xl">
-                        <p className="font-semibold text-white">{payload[0].name}</p>
-                        <p className="text-emerald-400 font-mono font-semibold">{formatValue(payload[0].value)}</p>
+                      <div className="bg-[#0B0F19] border border-slate-700/80 rounded-xl p-3 text-xs shadow-2xl min-w-[150px]">
+                        <p className="font-bold text-white mb-1">{payload[0].name}</p>
+                        <div className="flex items-center justify-between text-emerald-400 font-mono font-bold">
+                          <span>Value:</span>
+                          <span>{formatValue(payload[0].value)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-slate-400 text-[11px] font-mono mt-0.5">
+                          <span>Share:</span>
+                          <span>{pct}%</span>
+                        </div>
                       </div>
                     );
                   }
@@ -162,7 +226,7 @@ export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
                 data={pieData}
                 cx="50%"
                 cy="50%"
-                innerRadius={isDonut ? 55 : 0}
+                innerRadius={isDonut ? 52 : 0}
                 outerRadius={85}
                 paddingAngle={isDonut ? 3 : 1}
                 dataKey="value"
@@ -172,7 +236,7 @@ export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
                 ))}
               </Pie>
               <Legend
-                formatter={(val) => <span className="text-xs text-slate-300">{val}</span>}
+                formatter={(val) => <span className="text-xs text-slate-300 font-medium">{val}</span>}
               />
             </PieChart>
           </ResponsiveContainer>
@@ -184,11 +248,11 @@ export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
   // Case C: Area Chart
   if (hintType === 'area') {
     return (
-      <div className="space-y-2">
-        {customTitle && <h6 className="text-xs font-semibold text-slate-300">{customTitle}</h6>}
-        <div className="h-64 w-full">
+      <div className="space-y-3">
+        {customTitle && <h6 className="text-xs font-bold text-slate-300">{customTitle}</h6>}
+        <div className="h-64 sm:h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={rows} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
+            <AreaChart data={sanitizedRows} margin={{ top: 10, right: 15, left: 10, bottom: 20 }}>
               <defs>
                 <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#10B981" stopOpacity={0.4} />
@@ -199,7 +263,14 @@ export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
               <XAxis dataKey={xKey} stroke="#64748B" fontSize={11} tickLine={false} />
               <YAxis stroke="#64748B" fontSize={11} tickLine={false} tickFormatter={formatValue} />
               <Tooltip content={renderTooltip} />
-              <Area type="monotone" dataKey={yKey} stroke="#10B981" strokeWidth={2} fillOpacity={1} fill="url(#areaGrad)" />
+              <Area
+                type="monotone"
+                dataKey={yKey}
+                stroke="#10B981"
+                strokeWidth={2.5}
+                fillOpacity={1}
+                fill="url(#areaGrad)"
+              />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -210,11 +281,11 @@ export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
   // Case D: Line Chart
   if (hintType === 'line') {
     return (
-      <div className="space-y-2">
-        {customTitle && <h6 className="text-xs font-semibold text-slate-300">{customTitle}</h6>}
-        <div className="h-64 w-full">
+      <div className="space-y-3">
+        {customTitle && <h6 className="text-xs font-bold text-slate-300">{customTitle}</h6>}
+        <div className="h-64 sm:h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={rows} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
+            <LineChart data={sanitizedRows} margin={{ top: 10, right: 15, left: 10, bottom: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" vertical={false} />
               <XAxis dataKey={xKey} stroke="#64748B" fontSize={11} tickLine={false} />
               <YAxis stroke="#64748B" fontSize={11} tickLine={false} tickFormatter={formatValue} />
@@ -226,8 +297,9 @@ export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
                     type="monotone"
                     dataKey={col}
                     stroke={PALETTE[idx % PALETTE.length]}
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
+                    strokeWidth={2.5}
+                    dot={{ r: 3.5 }}
+                    activeDot={{ r: 6 }}
                   />
                 ))
               ) : (
@@ -240,6 +312,13 @@ export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
                   activeDot={{ r: 6 }}
                 />
               )}
+              {numericColumns.length > 1 && (
+                <Legend
+                  formatter={(val) => (
+                    <span className="text-xs text-slate-300 capitalize">{val.replace(/_/g, ' ')}</span>
+                  )}
+                />
+              )}
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -247,15 +326,23 @@ export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
     );
   }
 
-  // Case E: Bar Chart (Supports multi-series e.g. July vs August comparison or category rankings)
+  // Case E: Bar Chart (default for rankings, multi-metric comparisons, categories)
   return (
-    <div className="space-y-2">
-      {customTitle && <h6 className="text-xs font-semibold text-slate-300">{customTitle}</h6>}
-      <div className="h-64 w-full">
+    <div className="space-y-3">
+      {customTitle && <h6 className="text-xs font-bold text-slate-300">{customTitle}</h6>}
+      <div className="h-64 sm:h-72 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={rows.slice(0, 15)} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
+          <BarChart data={sanitizedRows.slice(0, 15)} margin={{ top: 10, right: 15, left: 10, bottom: 25 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" vertical={false} />
-            <XAxis dataKey={xKey} stroke="#64748B" fontSize={11} tickLine={false} />
+            <XAxis
+              dataKey={xKey}
+              stroke="#64748B"
+              fontSize={11}
+              tickLine={false}
+              angle={sanitizedRows.length > 6 ? -25 : 0}
+              textAnchor={sanitizedRows.length > 6 ? 'end' : 'middle'}
+              interval={0}
+            />
             <YAxis stroke="#64748B" fontSize={11} tickLine={false} tickFormatter={formatValue} />
             <Tooltip content={renderTooltip} />
             {numericColumns.length > 1 && numericColumns.length <= 4 ? (
@@ -265,12 +352,19 @@ export const VisualizationRenderer: React.FC<VisualizationRendererProps> = ({
                   dataKey={col}
                   fill={PALETTE[idx % PALETTE.length]}
                   radius={[4, 4, 0, 0]}
+                  maxBarSize={32}
                 />
               ))
             ) : (
-              <Bar dataKey={yKey} fill="#10B981" radius={[4, 4, 0, 0]} />
+              <Bar dataKey={yKey} fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={38} />
             )}
-            {numericColumns.length > 1 && <Legend formatter={(val) => <span className="text-xs text-slate-300 capitalize">{val.replace(/_/g, ' ')}</span>} />}
+            {numericColumns.length > 1 && (
+              <Legend
+                formatter={(val) => (
+                  <span className="text-xs text-slate-300 capitalize">{val.replace(/_/g, ' ')}</span>
+                )}
+              />
+            )}
           </BarChart>
         </ResponsiveContainer>
       </div>

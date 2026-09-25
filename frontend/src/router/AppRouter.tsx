@@ -7,9 +7,9 @@ import { RoleDashboard } from '../pages/RoleDashboard';
 import { AnalyticsChat } from '../pages/AnalyticsChat';
 import { DataSources } from '../pages/DataSources';
 import { Reports } from '../pages/Reports';
-import { Dashboards } from '../pages/Dashboards';
 import { Insights } from '../pages/Insights';
 import { Settings } from '../pages/Settings';
+import { UserManagement } from '../pages/UserManagement';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -46,9 +46,24 @@ interface RoleProtectedRouteProps {
  * Redirects unauthorized attempts to the user's authorized role dashboard.
  */
 const RoleProtectedRoute: React.FC<RoleProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const { user } = useAuth();
-  const userRole = user?.role || 'CEO';
+  const { user, isAuthenticated, isLoading } = useAuth();
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center p-12 min-h-[50vh]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs text-slate-400">Verifying security authorization...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const userRole = user.role;
   if (!allowedRoles.includes(userRole)) {
     const userRoleSlug = getRoleSlug(userRole);
     return <Navigate to={`/dashboard/${userRoleSlug}`} replace />;
@@ -140,9 +155,19 @@ export const AppRouter: React.FC = () => {
         <Route path="analytics" element={<AnalyticsChat />} />
         <Route path="data-sources" element={<DataSources />} />
         <Route path="reports" element={<Reports />} />
-        <Route path="dashboards" element={<Dashboards />} />
+        <Route path="dashboards" element={<DashboardRedirect />} />
         <Route path="insights" element={<Insights />} />
         <Route path="settings" element={<Settings />} />
+
+        {/* CEO-Only Administration: User & Role Management */}
+        <Route
+          path="admin/users"
+          element={
+            <RoleProtectedRoute allowedRoles={['CEO', 'ADMIN']}>
+              <UserManagement />
+            </RoleProtectedRoute>
+          }
+        />
       </Route>
 
       {/* Fallback */}

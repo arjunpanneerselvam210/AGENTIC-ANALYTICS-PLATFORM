@@ -10,13 +10,16 @@ import {
   Layers,
   ChevronLeft,
   ChevronRight,
-  PackageX
+  PackageX,
+  Download,
 } from 'lucide-react';
 import { Card } from '../common/Card';
 import { Badge } from '../common/Badge';
 import type { AnalyticsResponse, DataSource } from '../../types/analytics';
 import { VisualizationRenderer } from './VisualizationRenderer';
 import { RootCauseAnalysisCard } from './RootCauseAnalysisCard';
+import { downloadCSV } from '../../utils/exportUtils';
+import { formatISTTime } from '../../utils/dateUtils';
 
 
 interface QueryResultProps {
@@ -114,6 +117,14 @@ export const QueryResult: React.FC<QueryResultProps> = ({ response, result }) =>
   const paginatedRows = rawRows.slice(tablePage * rowsPerPage, (tablePage + 1) * rowsPerPage);
   const totalPages = Math.ceil(rawRows.length / rowsPerPage);
 
+  const handleExportCSV = () => {
+    if (!rawRows || rawRows.length === 0) return;
+    const cols = columns.length > 0 ? columns : Object.keys(rawRows[0]);
+    const dataRows = rawRows.map((row) => cols.map((c) => row[c]));
+    const sanitizedQuestion = (activeResponse.question || 'query').slice(0, 30).replace(/[^a-zA-Z0-9]/g, '_');
+    downloadCSV(`freshmart_${sanitizedQuestion}_${Date.now()}`, cols, dataRows);
+  };
+
   return (
     <Card className="p-6 space-y-5 border-slate-700/80 bg-[#0F1626] shadow-xl animate-fadeIn">
       {/* Header: Intent, Timestamp & View Mode Toggle */}
@@ -129,36 +140,48 @@ export const QueryResult: React.FC<QueryResultProps> = ({ response, result }) =>
             </span>
           )}
 
-          <span className="text-[11px] text-slate-500 font-mono flex items-center gap-1 ml-1">
-            <Calendar className="w-3 h-3" />
-            {timestamp ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Live'}
+          <span className="text-[11px] text-slate-400 font-mono flex items-center gap-1 ml-1">
+            <Calendar className="w-3 h-3 text-emerald-400" />
+            <span>{timestamp ? `${formatISTTime(timestamp)} IST` : 'Live'}</span>
           </span>
+
         </div>
 
-        {/* View Toggle */}
+        {/* View Toggle & Download Export Button */}
         {rawRows.length > 0 && (
-          <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-lg">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-lg">
+              <button
+                onClick={() => setViewMode('chart')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  viewMode === 'chart'
+                    ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <BarChart2 className="w-3.5 h-3.5" />
+                <span>Chart</span>
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  viewMode === 'table'
+                    ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <TableIcon className="w-3.5 h-3.5" />
+                <span>Table ({rawRows.length})</span>
+              </button>
+            </div>
+
             <button
-              onClick={() => setViewMode('chart')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                viewMode === 'chart'
-                  ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
+              onClick={handleExportCSV}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-medium text-slate-300 hover:text-emerald-400 hover:border-emerald-500/40 transition-colors shadow-sm"
+              title="Download results as CSV"
             >
-              <BarChart2 className="w-3.5 h-3.5" />
-              <span>Chart</span>
-            </button>
-            <button
-              onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                viewMode === 'table'
-                  ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <TableIcon className="w-3.5 h-3.5" />
-              <span>Table ({rawRows.length})</span>
+              <Download className="w-3.5 h-3.5" />
+              <span>Export CSV</span>
             </button>
           </div>
         )}

@@ -5,6 +5,7 @@ AI Chatbot schemas for FreshMart conversational assistant.
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field
+from app.core.time_utils import get_current_ist
 
 class ChatMessageRequest(BaseModel):
     """User conversational inquiry submitted to the AI Chatbot."""
@@ -29,4 +30,31 @@ class ChatMessageResponse(BaseModel):
     user_name: str = Field(..., description="Full name of the requesting user", example="Arun Kumar")
     allowed_domains: List[str] = Field(..., description="Business domains the user is authorized to query based on RBAC permissions", example=["CRM (Customers & Leads)", "Sales & Revenue", "ERP & Inventory"])
     model_used: str = Field(..., description="Ollama LLM model identifier utilized for generation", example="llama3.1:8b")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="UTC timestamp of reply generation")
+    timestamp: datetime = Field(default_factory=get_current_ist, description="IST timestamp of reply generation")
+
+
+class ChatSessionItem(BaseModel):
+    """Archived or active chat session item."""
+    id: str = Field(..., description="Unique conversation session ID", example="conv-1727280000000")
+    title: str = Field(..., description="Title of the session based on initial question", example="Show monthly sales trend")
+    started_at: str = Field(..., description="Formatted start date string", example="Sep 25, 08:30 PM")
+    queries_count: int = Field(default=0, description="Total queries executed in this session", example=4)
+    items: List[dict] = Field(default_factory=list, description="Array of history query and response items")
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class ChatSessionSaveRequest(BaseModel):
+    """Payload to save or archive a chat session."""
+    id: str = Field(..., description="Unique conversation session ID", example="conv-1727280000000")
+    title: str = Field(..., description="Title of the session", example="August Profit Investigation")
+    started_at: str = Field(..., description="Formatted start date string", example="Sep 25, 08:30 PM")
+    queries_count: int = Field(default=1, description="Total count of questions in session")
+    items: List[dict] = Field(default_factory=list, description="Array of history items with question and response")
+
+
+class ChatSessionListResponse(BaseModel):
+    """Response containing saved sessions for authenticated user."""
+    sessions: List[ChatSessionItem] = Field(default_factory=list, description="List of previous chat sessions")
+    total: int = Field(..., description="Total count of archived sessions", example=3)
+
