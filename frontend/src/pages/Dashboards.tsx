@@ -2,9 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   PanelsTopLeft,
-  Plus,
   ArrowRight,
-  Layout,
   Clock,
   Search,
   Building2,
@@ -19,7 +17,6 @@ import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { useAuth } from '../context/AuthContext';
-import { formatISTDate } from '../utils/dateUtils';
 
 interface RealDashboardCard {
   id: string;
@@ -215,7 +212,7 @@ export const Dashboards: React.FC = () => {
                     </div>
                   </div>
 
-                  <Badge variant={isAllowed ? 'emerald' : 'secondary'}>
+                  <Badge variant={isAllowed ? 'emerald' : 'slate'}>
                     <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${isAllowed ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
                     {isAllowed ? dashboard.status : 'Restricted'}
                   </Badge>
